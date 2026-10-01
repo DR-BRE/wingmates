@@ -91,6 +91,10 @@ class TestSignedOut(SignInCase):
             self.assertEqual(r.status_code, 200)
 
 
+    def test_the_health_check_needs_no_sign_in(self):
+        r = self.client.get("/healthz", base_url="http://10.214.3.7:10000")
+        self.assertEqual((r.status_code, r.get_json()), (200, {"ok": True}))
+
 class TestSignIn(SignInCase):
 
     def test_google_is_asked_to_return_to_the_configured_address(self):

@@ -7,6 +7,8 @@ account, and nothing under /api/ answers without one.
 from __future__ import annotations
 
 import secrets
+import sqlite3
+from contextlib import closing
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -126,6 +128,10 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
 
     @app.before_request
     def guard():
+        if request.path == "/healthz":
+            # The host's health checker calls from inside its own network,
+            # under a name this app does not know. The route reveals nothing.
+            return None
         if urlsplit("//" + request.host).hostname not in allowed_hosts:
             raise ApiError("unknown host", 403)
         if (google and request.method == "GET" and request.host.lower() != base_host
@@ -157,6 +163,18 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
         return resp
 
     # --------------------------------------------------------------- pages
+    @app.get("/healthz")
+    def healthz():
+        """Can the database be read? Opened read-only, so checking a missing
+        file does not create an empty one in its place."""
+        try:
+            with closing(sqlite3.connect(f"file:{config.db_path}?mode=ro",
+                                         uri=True)) as db:
+                db.execute("SELECT 1 FROM users LIMIT 1")
+        except sqlite3.Error:
+            return jsonify(ok=False), 503
+        return jsonify(ok=True)
+
     @app.get("/")
     def index():
         if google and g.user is None:

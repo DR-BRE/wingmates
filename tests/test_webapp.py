@@ -333,5 +333,27 @@ class TestHostCheck(WebCase):
         self.assertEqual(r.status_code, 200)
 
 
+class TestHealth(WebCase):
+    INTERNAL = "http://10.214.3.7:10000"
+
+    def test_it_answers_whatever_host_the_checker_uses(self):
+        r = self.client.get("/healthz", base_url=self.INTERNAL)
+        self.assertEqual((r.status_code, r.get_json()), (200, {"ok": True}))
+        # Only the health check is exempt from the host allow-list.
+        self.assertEqual(
+            self.client.get("/api/me", base_url=self.INTERNAL).status_code, 403)
+        self.assertEqual(self.client.get("/", base_url=self.INTERNAL).status_code,
+                         403)
+
+    def test_it_reports_a_missing_database_without_creating_one(self):
+        (self.dir / "flights.db").unlink()
+        r = self.client.get("/healthz")
+        self.assertEqual((r.status_code, r.get_json()), (503, {"ok": False}))
+        self.assertFalse((self.dir / "flights.db").exists())
+
+    def test_it_only_answers_get(self):
+        self.assertEqual(self.post("/healthz").status_code, 405)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
