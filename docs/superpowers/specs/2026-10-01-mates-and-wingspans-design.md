@@ -353,6 +353,45 @@ are only used as `img src` and only when they start with `https://`.
 
 ## Hosting
 
+Two routes are built. **The one in use is the free one.**
+
+### Free: Vercel and Turso (chosen 2026-10-01)
+
+- The app runs on Vercel's Hobby plan, deployed from the `main` branch. That
+  plan is for personal, non-commercial use, and pauses a site that exceeds
+  its limits rather than billing for it.
+- Vercel has no persistent disk, so the data lives in a Turso database, a
+  hosted service that speaks SQLite's dialect. The app reaches it through a
+  small client of its own (`fc/turso.py`) over Turso's HTTP API. Turso's
+  Python libraries were not used: at the time of writing their documentation
+  listed three packages and did not show enough to rely on one.
+- The stores run unchanged on either a local SQLite file or Turso. Local use
+  keeps the file. Tests run the store suites against both.
+- Consequences of a network database, accepted for a free host:
+  - Every query is a network request, so pages are slower than locally.
+  - A transaction has about five seconds. CSV import is therefore batched and
+    capped at 5,000 flights per file.
+  - Foreign-key enforcement is not assumed. Deleting an account removes its
+    flights, requests and mate pairs explicitly.
+  - The tables are created if missing at start. There is no schema version on
+    Turso yet; a later change to the tables needs a migration step.
+  - Backups are Turso's one day of point-in-time restore, plus each person's
+    own CSV export.
+- With no disk, nothing may be written to the filesystem: `SECRET_KEY` is
+  required whenever Turso is in use, and the hosted entry point refuses to
+  start without it.
+- Static assets are in `public/static/`, which Vercel serves directly. HTML
+  pages stay behind the app's routes.
+- When `WINGMATES_BASE_URL` is unset on Vercel, the project's production
+  address is used. Preview deployments, which have other addresses, answer
+  "unknown host".
+
+### Paid alternative: Render
+
+Built and reviewed, not deployed. About $7.25 a month for faster pages and
+week-long disk snapshots.
+
+
 - A `Dockerfile` runs gunicorn with one worker process and several threads.
   One process is required: SQLite on a local disk does not support several
   servers writing at once.
