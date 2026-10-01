@@ -171,6 +171,56 @@ def create_app(config: Config, tracker=None,
         found = history.airports.search(request.args.get("q", ""))
         return jsonify(airports=[a.to_json() for a in found])
 
+    # -------------------------------------------------------------- social
+    @app.get("/api/social")
+    def social():
+        return jsonify(mates.social(g.user["id"]))
+
+    @app.get("/api/users/lookup")
+    def lookup():
+        card = mates.card(g.user["id"], request.args.get("username", ""))
+        if card is None:
+            raise ApiError("no one has that username", 404)
+        return jsonify(card)
+
+    @app.post("/api/mates/request")
+    def mate_request():
+        try:
+            return jsonify(mates.request(g.user["id"],
+                                         str(body().get("username") or "")))
+        except LookupError as e:
+            raise ApiError(str(e), 404) from None
+        except ValueError as e:
+            raise ApiError(str(e)) from None
+
+    def _mate_action(action, other_id: int, missing: str):
+        if not action(g.user["id"], other_id):
+            raise ApiError(missing, 404)
+        return jsonify(ok=True)
+
+    @app.post("/api/mates/<int:other_id>/accept")
+    def mate_accept(other_id: int):
+        return _mate_action(mates.accept, other_id, "no such request")
+
+    @app.post("/api/mates/<int:other_id>/decline")
+    def mate_decline(other_id: int):
+        return _mate_action(mates.decline, other_id, "no such request")
+
+    @app.post("/api/mates/<int:other_id>/cancel")
+    def mate_cancel(other_id: int):
+        return _mate_action(mates.cancel, other_id, "no such request")
+
+    @app.post("/api/mates/<int:other_id>/remove")
+    def mate_remove(other_id: int):
+        return _mate_action(mates.remove, other_id, "not found")
+
+    @app.get("/api/mates/<int:other_id>/routes")
+    def mate_routes(other_id: int):
+        routes = mates.routes(g.user["id"], other_id)
+        if routes is None:
+            raise ApiError("not found", 404)
+        return jsonify(routes=routes)
+
     # ----------------------------------------------------------- dev users
     if config.dev_users:
         @app.post("/dev/login")

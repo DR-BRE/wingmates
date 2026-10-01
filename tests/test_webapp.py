@@ -183,5 +183,88 @@ class TestPages(WebCase):
             self.assertEqual(r.status_code, 200)
 
 
+PRIVATE = {"email", "date", "airline", "flight_number", "aircraft", "seat",
+           "notes", "google_sub"}
+
+
+def keys(obj):
+    if isinstance(obj, dict):
+        return set(obj) | {k for v in obj.values() for k in keys(v)}
+    if isinstance(obj, list):
+        return {k for v in obj for k in keys(v)}
+    return set()
+
+
+class TestSocialRoutes(WebCase):
+
+    def setUp(self):
+        super().setUp()
+        self.ann, self.bob = self.login("ann"), self.login("bob")
+        self.bob_id = self.users.by_username("bob")["id"]
+        self.ann_id = self.users.by_username("ann")["id"]
+        self.post("/api/history", {"date": "2024-03-09", "from": "ATL",
+                                   "to": "LHR", "airline": "Delta",
+                                   "seat": "34A", "notes": "secret"}, self.bob)
+
+    def test_lookup_takes_usernames_the_way_people_type_them(self):
+        r = self.ann.get("/api/users/lookup?username=%40Bob%20")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.get_json(), {
+            "id": self.bob_id, "username": "bob", "name": "bob",
+            "picture_url": None, "relation": "none"})
+        for q in ("bo", "nobody", ""):
+            r = self.ann.get(f"/api/users/lookup?username={q}")
+            self.assertEqual((r.status_code, r.get_json()),
+                             (404, {"error": "no one has that username"}))
+
+    def test_request_accept_compare_and_remove(self):
+        r = self.post("/api/mates/request", {"username": "bob"}, self.ann)
+        self.assertEqual(r.get_json()["relation"], "requested")
+        s = self.bob.get("/api/social").get_json()
+        self.assertEqual([p["username"] for p in s["incoming"]], ["ann"])
+
+        self.assertEqual(self.post(f"/api/mates/{self.ann_id}/accept",
+                                   client=self.bob).get_json(), {"ok": True})
+        s = self.ann.get("/api/social").get_json()
+        self.assertEqual(s["mates"][0]["username"], "bob")
+        self.assertGreater(s["mates"][0]["stats"]["distance_mi"], 4000)
+        self.assertEqual(keys(s) & PRIVATE, set())
+
+        routes = self.ann.get(f"/api/mates/{self.bob_id}/routes").get_json()
+        self.assertEqual([(r["from"]["iata"], r["to"]["iata"])
+                          for r in routes["routes"]], [("ATL", "LHR")])
+        self.assertEqual(keys(routes) & PRIVATE, set())
+
+        self.assertEqual(self.post(f"/api/mates/{self.bob_id}/remove",
+                                   client=self.ann).status_code, 200)
+        self.assertEqual(self.bob.get("/api/social").get_json()["mates"], [])
+
+    def test_decline_and_cancel(self):
+        self.post("/api/mates/request", {"username": "bob"}, self.ann)
+        self.assertEqual(self.post(f"/api/mates/{self.ann_id}/decline",
+                                   client=self.bob).status_code, 200)
+        self.assertEqual(self.post(f"/api/mates/{self.ann_id}/decline",
+                                   client=self.bob).status_code, 404)
+        self.assertEqual(self.post(f"/api/mates/{self.bob_id}/cancel",
+                                   client=self.ann).status_code, 200)
+        self.assertEqual(self.ann.get("/api/social").get_json()["outgoing"], [])
+
+    def test_request_errors(self):
+        r = self.post("/api/mates/request", {"username": "nobody"}, self.ann)
+        self.assertEqual(r.status_code, 404)
+        r = self.post("/api/mates/request", {"username": "ann"}, self.ann)
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("own", r.get_json()["error"])
+
+    def test_routes_of_a_stranger_look_like_a_missing_user(self):
+        stranger = self.ann.get(f"/api/mates/{self.bob_id}/routes")
+        missing = self.ann.get("/api/mates/999/routes")
+        self.assertEqual(stranger.status_code, 404)
+        self.assertEqual(stranger.get_json(), missing.get_json())
+        self.post("/api/mates/request", {"username": "bob"}, self.ann)
+        self.assertEqual(
+            self.ann.get(f"/api/mates/{self.bob_id}/routes").status_code, 404)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
