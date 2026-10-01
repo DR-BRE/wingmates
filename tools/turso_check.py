@@ -33,6 +33,7 @@ def main() -> int:
     database = config.turso
     print(f"database  {database.url}")
 
+    user = None
     try:
         t0 = time.perf_counter()
         history = History(Airports(), database)
@@ -63,17 +64,51 @@ def main() -> int:
         except ValueError:
             print("unique    a duplicate username is refused")
 
-        users.delete(user["id"])
-        with closing(connect(database)) as db:
-            left = db.execute("SELECT COUNT(*) FROM flights WHERE user_id = ?",
-                              (user["id"],)).fetchone()[0]
-        if users.get(user["id"]) is not None or left:
-            print("FAILED    the throwaway user or their flight was left behind")
+        # A transaction that fails part-way must keep nothing.
+        twin = "check_" + secrets.token_hex(4)
+        try:
+            with closing(connect(database)) as db, db:
+                for _ in range(2):
+                    db.execute("INSERT INTO users (username, name, created_at)"
+                               " VALUES (?, 'x', 't')", (twin,))
+            print("FAILED    a duplicate inside a transaction was accepted")
             return 1
-        print("cleanup   throwaway user and flight removed")
+        except sqlite3.IntegrityError:
+            pass
+        if users.by_username(twin) is not None:
+            print("FAILED    a failed transaction kept its first row")
+            users.delete(users.by_username(twin)["id"])
+            return 1
+        print("rollback  a failed transaction keeps nothing")
+
+        # A year of daily flights in one file: how long does an import take?
+        days = [f"2023-{m:02d}-{d:02d}" for m in range(1, 13) for d in range(1, 29)]
+        text = "date,from,to\n" + "".join(f"{day},ATL,JFK\n" for day in days)
+        t0 = time.perf_counter()
+        report = mine.import_csv(text)
+        took = time.perf_counter() - t0
+        if report["added"] != len(days) or report["errors"]:
+            print(f"FAILED    import added {report['added']} of {len(days)}")
+            return 1
+        print(f"import    {len(days)} flights in {took:.2f}s")
     except sqlite3.Error as e:
         print(f"FAILED    {type(e).__name__}: {e}")
         return 1
+    finally:
+        # Leave nothing behind, whatever happened above.
+        if user is not None:
+            try:
+                users.delete(user["id"])
+                with closing(connect(database)) as db:
+                    left = db.execute(
+                        "SELECT COUNT(*) FROM flights WHERE user_id = ?",
+                        (user["id"],)).fetchone()[0]
+                if users.get(user["id"]) is not None or left:
+                    print("WARNING   the throwaway user or flights were left behind")
+                else:
+                    print("cleanup   throwaway user and flights removed")
+            except sqlite3.Error as e:
+                print(f"WARNING   cleanup failed: {type(e).__name__}")
 
     print("OK")
     return 0

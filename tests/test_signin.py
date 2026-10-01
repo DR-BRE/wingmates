@@ -408,6 +408,7 @@ class TestHosted(unittest.TestCase):
         from unittest import mock
         from tests.fake_turso import FakeTurso
         fake = FakeTurso(self.dir / "remote.db")
+        self.addCleanup(fake.shutdown)
         patcher = mock.patch("fc.turso.send", fake.send)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -443,6 +444,13 @@ class TestHosted(unittest.TestCase):
                         side_effect=sqlite3.OperationalError("database unreachable")):
             r = client.get("/healthz")
         self.assertEqual((r.status_code, r.get_json()), (503, {"ok": False}))
+
+
+    def test_on_vercel_it_refuses_to_start_without_a_turso_database(self):
+        env = {**self.env, "VERCEL": "1"}
+        with self.assertRaises(RuntimeError) as cm:
+            build(env, sign_in=self.google)
+        self.assertIn("TURSO_DATABASE_URL", str(cm.exception))
 
 
 if __name__ == "__main__":

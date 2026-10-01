@@ -7,6 +7,7 @@ account, and nothing under /api/ answers without one.
 from __future__ import annotations
 
 import secrets
+import sqlite3
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -119,6 +120,15 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
     @app.errorhandler(ApiError)
     def api_error(e: ApiError):
         return jsonify(error=e.message), e.status
+
+    @app.errorhandler(sqlite3.Error)
+    def database_error(e: sqlite3.Error):
+        # The type only: a database error's text can quote what was stored.
+        app.logger.error("database error: %s", type(e).__name__)
+        message = "the database is unavailable; please try again shortly"
+        if request.path.startswith(("/api/", "/dev/")):
+            return jsonify(error=message), 503
+        return message.capitalize() + ".", 503
 
     @app.errorhandler(HTTPException)
     def http_error(e: HTTPException):

@@ -42,7 +42,20 @@ class FakeTurso:
         self.file = file
         self.calls = []              # every payload received, in order
         self._streams = {}           # baton -> open connection
+        # Misbehaviours a real service could show, for tests to switch on.
+        self.drop_stream_on_reply = None   # N: the Nth open-stream reply has no baton
+        self.fail_begin = False            # BEGIN is answered with an error
+        self.truncate_results = False      # the last result is missing
+        self._open_replies = 0
         self._lock = threading.Lock()
+
+    def shutdown(self):
+        """Close connections that clients abandoned, as the real service does
+        when a stream goes idle. Register with addCleanup."""
+        with self._lock:
+            streams, self._streams = self._streams, {}
+        for conn in streams.values():
+            conn.close()
 
     def statements(self):
         """Every SQL string received, flattened, for assertions."""
@@ -68,6 +81,10 @@ class FakeTurso:
                 results.append({"type": "ok", "response": {"type": "close"}})
                 continue
             stmt = request["stmt"]
+            if self.fail_begin and stmt["sql"] == "BEGIN":
+                results.append({"type": "error", "error": {
+                    "message": "database is locked", "code": "SQLITE_BUSY"}})
+                continue
             try:
                 cur = conn.execute(stmt["sql"],
                                    [_decode(a) for a in stmt.get("args", [])])
@@ -90,7 +107,13 @@ class FakeTurso:
                     "message": str(e), "code": "SQLITE_ERROR"}})
         new_baton = None
         if not closed:
-            new_baton = secrets.token_hex(8)
-            with self._lock:
-                self._streams[new_baton] = conn
+            self._open_replies += 1
+            if self._open_replies == self.drop_stream_on_reply:
+                conn.close()            # the service gave up on the stream
+            else:
+                new_baton = secrets.token_hex(8)
+                with self._lock:
+                    self._streams[new_baton] = conn
+        if self.truncate_results:
+            results = results[:-1]
         return {"baton": new_baton, "base_url": None, "results": results}

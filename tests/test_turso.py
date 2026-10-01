@@ -38,6 +38,7 @@ class TursoCase(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.fake = FakeTurso(Path(tmp.name) / "remote.db")
+        self.addCleanup(self.fake.shutdown)
         patcher = mock.patch("fc.turso.send", self.fake.send)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -133,12 +134,17 @@ class TestTransactions(TursoCase):
                 c.execute("INSERT INTO t (name) VALUES (?)", ("a",))
 
     def test_executemany_batches_rows_into_few_requests(self):
-        rows = [(f"n{i}",) for i in range(450)]
+        rows = [(f"n{i}",) for i in range(1100)]
         with self.conn() as c, c:
             c.executemany("INSERT INTO t (name) VALUES (?)", rows)
-        # 200 + 200 + 50, then the commit: four requests for 450 rows.
-        self.assertEqual(len(self.fake.calls), 4)
-        self.assertEqual(len(self.names()), 450)
+        # BEGIN, then 500 + 500 + 100, then the commit: five requests.
+        self.assertEqual(len(self.fake.calls), 5)
+        self.assertEqual(len(self.names()), 1100)
+
+    def test_executemany_with_no_rows_sends_nothing(self):
+        with self.conn() as c, c:
+            c.executemany("INSERT INTO t (name) VALUES (?)", [])
+        self.assertEqual(self.fake.calls, [])
 
     def test_executemany_is_all_or_nothing(self):
         rows = [("a",), ("b",), ("a",)]
@@ -155,6 +161,70 @@ class TestTransactions(TursoCase):
         with self.conn() as c:
             c.execute("SELECT * FROM a")
             c.execute("SELECT * FROM b")
+
+
+class TestRepliesAreNotTrusted(TursoCase):
+    """A transaction must never quietly turn into separate auto-commits. Each
+    of these replies is one a real service could send and the stand-in, left
+    alone, never would."""
+
+    INSERT = "INSERT INTO t (name) VALUES (?)"
+
+    def test_a_stream_dropped_at_begin_writes_nothing(self):
+        self.fake.drop_stream_on_reply = 1
+        with self.assertRaises(sqlite3.OperationalError):
+            with self.conn() as c, c:
+                c.execute(self.INSERT, ("a",))
+        self.assertNotIn(self.INSERT, self.fake.statements())
+        self.assertEqual(self.names(), [])
+
+    def test_a_stream_dropped_mid_transaction_stops_everything(self):
+        self.fake.drop_stream_on_reply = 2
+        with self.assertRaises(sqlite3.OperationalError):
+            with self.conn() as c, c:
+                c.execute(self.INSERT, ("a",))
+                c.execute(self.INSERT, ("b",))
+        # The second write must not have gone out on a fresh, auto-committing
+        # connection.
+        self.assertEqual(self.fake.statements().count(self.INSERT), 1)
+        self.assertEqual(self.names(), [])
+
+    def test_a_failed_begin_sends_no_write(self):
+        self.fake.fail_begin = True
+        with self.assertRaises(sqlite3.OperationalError):
+            with self.conn() as c, c:
+                c.execute(self.INSERT, ("a",))
+        with self.assertRaises(sqlite3.OperationalError):
+            with self.conn() as c, c:
+                c.executemany(self.INSERT, [("a",), ("b",)])
+        self.assertNotIn(self.INSERT, self.fake.statements())
+        self.fake.fail_begin = False
+        self.assertEqual(self.names(), [])
+
+    def test_a_reply_with_too_few_results_is_an_error_not_a_success(self):
+        self.fake.truncate_results = True
+        with self.assertRaises(sqlite3.OperationalError):
+            with self.conn() as c, c:
+                c.executemany(self.INSERT, [("a",), ("b",), ("a",)])
+        with self.assertRaises(sqlite3.OperationalError):
+            with self.conn() as c:
+                c.execute("SELECT COUNT(*) FROM t")
+        self.fake.truncate_results = False
+        self.assertEqual(self.names(), [])
+
+    def test_an_empty_statement_is_an_error_not_a_crash(self):
+        with self.conn() as c:
+            with self.assertRaises(sqlite3.OperationalError):
+                c.execute("   ")
+
+    def test_a_constraint_error_is_recognised_by_message_too(self):
+        for err in ({"message": "UNIQUE constraint failed: users.username",
+                     "code": "SOMETHING_ELSE"},
+                    {"message": "SQLite error: UNIQUE constraint failed: t.name"},
+                    {"message": "x", "code": "SQLITE_CONSTRAINT_UNIQUE"}):
+            self.assertIsInstance(turso._error(err), sqlite3.IntegrityError, err)
+        self.assertNotIsInstance(turso._error({"message": "no such table: t"}),
+                                 sqlite3.IntegrityError)
 
 
 class TestTransport(unittest.TestCase):
@@ -195,6 +265,28 @@ class TestTransport(unittest.TestCase):
                 with self.assertRaises(sqlite3.OperationalError) as cm:
                     turso.send(self.db, {"requests": []})
             self.assertNotIn("s3cret-token", str(cm.exception))
+
+    def test_an_unreadable_or_misshapen_reply_is_an_operational_error(self):
+        unreadable = self.reply()
+        unreadable.json.side_effect = ValueError("not json")
+        for reply in (unreadable, self.reply(body=["a", "list"]),
+                      self.reply(body={"baton": None}),
+                      self.reply(body={"results": [{"type": "ok"}]})):
+            with mock.patch.object(turso._session, "post", return_value=reply):
+                with self.assertRaises(sqlite3.OperationalError):
+                    TursoConnection(self.db).execute("SELECT 1")
+
+    def test_a_base_url_that_is_not_https_is_not_followed(self):
+        first = self.reply(body={"baton": "b1", "base_url": "http://evil.example",
+                                 "results": [{"type": "ok", "response": {
+                                     "type": "execute", "result": {}}}]})
+        with mock.patch.object(turso._session, "post",
+                               return_value=first) as post:
+            conn = TursoConnection(self.db)
+            conn.execute("BEGIN")
+            conn.execute("SELECT 1")
+        self.assertTrue(all(call[0][0].startswith("https://wm-test.turso.io")
+                            for call in post.call_args_list))
 
     def test_a_connection_survives_nothing_after_a_transport_failure(self):
         conn = TursoConnection(self.db)

@@ -383,5 +383,18 @@ class TestBodyCap(WebCase):
         self.assertEqual((r.status_code, r.get_json()["added"]), (200, 312))
 
 
+class TestDatabaseOutage(WebCase):
+
+    def test_a_database_failure_is_a_503_in_json_not_a_crash_page(self):
+        import sqlite3
+        from unittest import mock
+        with mock.patch("fc.history.connect",
+                        side_effect=sqlite3.OperationalError("database unreachable")):
+            with self.assertLogs(self.app.logger, "ERROR"):
+                r = self.client.get("/api/history")
+        self.assertEqual(r.status_code, 503)
+        self.assertIn("database", r.get_json()["error"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

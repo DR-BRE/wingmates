@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 import requests
 
 TIMEOUT_S = 10
-CHUNK = 200                     # statements per request in executemany()
+CHUNK = 500                     # statements per request in executemany()
 _WRITES = ("INSERT", "UPDATE", "DELETE", "REPLACE")
 
 _session = requests.Session()
@@ -60,7 +60,11 @@ def send(database: Turso, payload: dict, base_url: str | None = None) -> dict:
     if reply.status_code != 200:
         raise sqlite3.OperationalError(
             f"database returned HTTP {reply.status_code}")
-    return reply.json()
+    try:
+        return reply.json()
+    except ValueError:
+        raise sqlite3.OperationalError(
+            "database sent a reply that is not JSON") from None
 
 
 def _encode(value) -> dict:
@@ -90,7 +94,8 @@ def _decode(cell: dict):
 
 def _error(err: dict) -> sqlite3.Error:
     message = err.get("message", "database error")
-    if str(err.get("code", "")).startswith("SQLITE_CONSTRAINT"):
+    if (str(err.get("code", "")).startswith("SQLITE_CONSTRAINT")
+            or "constraint failed" in message):
         return sqlite3.IntegrityError(message)
     return sqlite3.OperationalError(message)
 
@@ -145,10 +150,23 @@ class TursoConnection:
         self._base_url = None
         self._tx = False
 
+    def _lost(self, why: str) -> sqlite3.OperationalError:
+        """Forget the far side and report why. After this the connection has
+        no transaction: nothing more is sent as if one were still open."""
+        self._baton, self._tx = None, False
+        return sqlite3.OperationalError(why)
+
     def _run(self, statements, close: bool) -> list:
         """Send statements in one request. Returns one item per statement: a
         result dict, or the exception that statement produced. Errors come
-        back as values so the caller can update its state before raising."""
+        back as values so the caller can update its state before raising.
+
+        The reply is checked, not trusted. A transaction that lost its
+        connection, or a reply missing results, must stop everything here:
+        carrying on would send the remaining writes on a fresh connection,
+        where each would commit on its own."""
+        if self._tx and not self._baton:
+            raise self._lost("the transaction's connection was lost")
         reqs = [{"type": "execute",
                  "stmt": {"sql": sql, "args": [_encode(a) for a in args]}}
                 for sql, args in statements]
@@ -163,12 +181,24 @@ class TursoConnection:
             # No answer: whatever was open on the far side is gone for us.
             self._baton, self._tx = None, False
             raise
-        self._baton = None if close else reply.get("baton")
-        self._base_url = reply.get("base_url") or self._base_url
+        results = reply.get("results") if isinstance(reply, dict) else None
+        if not isinstance(results, list) or len(results) < len(reqs):
+            raise self._lost("database sent an incomplete reply")
+        baton = None if close else reply.get("baton")
+        if not close and not baton:
+            raise self._lost("database closed the connection mid-transaction")
+        self._baton = baton
+        base_url = reply.get("base_url")
+        if isinstance(base_url, str) and base_url.startswith("https://"):
+            self._base_url = base_url        # the token is only sent over https
         out = []
-        for item in reply["results"][:len(statements)]:
-            out.append(_error(item["error"]) if item["type"] == "error"
-                       else item["response"]["result"])
+        try:
+            for item in results[:len(statements)]:
+                out.append(_error(item.get("error") or {})
+                           if item["type"] == "error"
+                           else item["response"]["result"])
+        except (KeyError, TypeError, AttributeError):
+            raise self._lost("database sent a reply in an unexpected shape") from None
         return out
 
     @staticmethod
@@ -177,18 +207,32 @@ class TursoConnection:
             if isinstance(r, Exception):
                 raise r
 
+    def _begin(self) -> None:
+        """Open a transaction, alone in its own request. Sending BEGIN in the
+        same request as the first write would save a round trip, but if BEGIN
+        failed the write would still run, outside any transaction."""
+        (begin,) = self._run([("BEGIN", ())], close=False)
+        if isinstance(begin, Exception):
+            try:
+                self._run([], close=True)        # release the connection
+            except sqlite3.Error:
+                pass
+            self._baton = None
+            raise begin
+        self._tx = True
+
     def execute(self, sql: str, params=()) -> Result:
-        verb = sql.lstrip().split(None, 1)[0].upper()
-        params = tuple(params)
+        words = sql.split(None, 1)
+        if not words:
+            raise sqlite3.OperationalError("empty statement")
+        verb = words[0].upper()
+        if verb == "BEGIN":
+            if not self._tx:
+                self._begin()
+            return Result({})
         if verb in _WRITES and not self._tx:
-            begin, result = self._run([("BEGIN", ()), (sql, params)], close=False)
-            if isinstance(begin, Exception):
-                raise begin
-            self._tx = True
-        elif self._tx:
-            (result,) = self._run([(sql, params)], close=False)
-        else:
-            (result,) = self._run([(sql, params)], close=True)
+            self._begin()
+        (result,) = self._run([(sql, tuple(params))], close=not self._tx)
         if isinstance(result, Exception):
             raise result
         return Result(result)
@@ -197,14 +241,13 @@ class TursoConnection:
         """Run one statement for many rows, a chunk per request, all inside
         the connection's transaction."""
         rows = [tuple(r) for r in rows]
+        if not rows:
+            return
+        if not self._tx:
+            self._begin()
         for start in range(0, len(rows), CHUNK):
-            statements = [(sql, r) for r in rows[start:start + CHUNK]]
-            if not self._tx:
-                statements.insert(0, ("BEGIN", ()))
-            results = self._run(statements, close=False)
-            if not isinstance(results[0], Exception):
-                self._tx = True
-            self._first_error(results)
+            self._first_error(self._run(
+                [(sql, r) for r in rows[start:start + CHUNK]], close=False))
 
     def batch(self, statements: list[str]) -> None:
         """Several statements with no arguments in one self-contained

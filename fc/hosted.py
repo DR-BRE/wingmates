@@ -7,6 +7,7 @@ behalf of whoever is at the keyboard.
 """
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 
 from flask import Flask
@@ -16,6 +17,7 @@ from .webapp import create_app
 
 
 def build(env: Mapping[str, str] | None = None, sign_in=None) -> Flask:
+    env = os.environ if env is None else env
     config = Config.from_env(env)
     if config.auth != "google":
         raise RuntimeError(
@@ -25,4 +27,8 @@ def build(env: Mapping[str, str] | None = None, sign_in=None) -> Flask:
         raise RuntimeError(
             "with a Turso database, SECRET_KEY must be set: a host without a "
             "disk has nowhere to keep a generated session key")
+    if env.get("VERCEL") and config.turso is None:
+        raise RuntimeError(
+            "on Vercel the data must live in Turso, because there is no disk: "
+            "set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN")
     return create_app(config, tracker=None, sign_in=sign_in)

@@ -29,6 +29,7 @@ def database(case, d: Path):
     if not getattr(case, "on_turso", False):
         return d / "flights.db"
     case.fake = FakeTurso(d / "remote.db")
+    case.addCleanup(case.fake.shutdown)
     patcher = mock.patch("fc.turso.send", case.fake.send)
     patcher.start()
     case.addCleanup(patcher.stop)
