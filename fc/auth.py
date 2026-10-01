@@ -10,7 +10,6 @@ import os
 import secrets
 from pathlib import Path
 
-from authlib.common.errors import AuthlibBaseError
 from authlib.integrations.flask_client import OAuth
 
 GOOGLE_METADATA = "https://accounts.google.com/.well-known/openid-configuration"
@@ -46,6 +45,7 @@ def persistent_key(data_dir: Path) -> str:
 
 class GoogleSignIn:
     def __init__(self, app, client_id: str, client_secret: str):
+        self._log = app.logger
         self._oauth = OAuth(app)
         self._oauth.register(
             name="google",
@@ -59,11 +59,19 @@ class GoogleSignIn:
         return self._oauth.google.authorize_redirect(redirect_uri)
 
     def finish(self) -> dict | None:
-        """Who signed in, or None if they cancelled or the response did not
-        verify. Authlib checks the state and nonce and validates the ID token."""
+        """Who signed in, or None if nobody did. Authlib checks the state and
+        nonce and validates the ID token.
+
+        This fails closed on any exception at all. A cancelled sign-in, a
+        forged state, a token that does not verify and a network failure are
+        raised by three different libraries with no common base class, and
+        every one of them means the same thing here: nobody signed in."""
         try:
             token = self._oauth.google.authorize_access_token()
-        except AuthlibBaseError:
+        except Exception as e:                        # noqa: BLE001
+            # The type only: the message can carry token or URL contents.
+            self._log.warning("Google sign-in did not complete: %s",
+                              type(e).__name__)
             return None
         info = token.get("userinfo") or {}
         if not info.get("sub"):

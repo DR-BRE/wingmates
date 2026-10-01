@@ -10,6 +10,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 DEFAULT_DATA_DIR = Path.home() / ".wingmates"
 DEFAULT_BASE_URL = "http://localhost:8817"
@@ -24,6 +25,27 @@ def _flag(env: Mapping[str, str], name: str, default: bool) -> bool:
     if raw not in ("0", "1"):
         raise ValueError(f"{name} must be 0 or 1, got {raw!r}")
     return raw == "1"
+
+
+def normalize_base_url(raw: str) -> str:
+    """The address people use, in one canonical spelling: lowercase host, no
+    default port, no trailing slash. The app compares request hosts against
+    this, so two spellings of one address must not differ."""
+    try:
+        parts = urlsplit(raw)
+        port = parts.port
+    except ValueError:
+        parts = port = None
+    if (parts is None or parts.scheme not in ("http", "https")
+            or not parts.hostname or parts.username or parts.password
+            or parts.path not in ("", "/") or parts.query or parts.fragment):
+        raise ValueError(
+            "WINGMATES_BASE_URL must look like https://host or "
+            f"http://host:port, got {raw!r}")
+    host = f"[{parts.hostname}]" if ":" in parts.hostname else parts.hostname
+    default = 443 if parts.scheme == "https" else 80
+    return f"{parts.scheme}://{host}" + (
+        f":{port}" if port and port != default else "")
 
 
 def _google_client(env: Mapping[str, str], data_dir: Path) -> tuple[str, str]:
@@ -57,6 +79,10 @@ class Config:
     google_client_id: str | None = None
     google_client_secret: str | None = field(default=None, repr=False)
 
+    def __post_init__(self):
+        # Frozen, so set through object: every Config holds the canonical form.
+        object.__setattr__(self, "base_url", normalize_base_url(self.base_url))
+
     @property
     def db_path(self) -> Path:
         return self.data_dir / "flights.db"
@@ -79,7 +105,7 @@ class Config:
             # Switching users without signing in must never work on a real site.
             dev_users=_flag(env, "WINGMATES_DEV_USERS", False) and local,
             data_dir=data_dir,
-            base_url=(env.get("WINGMATES_BASE_URL") or DEFAULT_BASE_URL).rstrip("/"),
+            base_url=env.get("WINGMATES_BASE_URL") or DEFAULT_BASE_URL,
             secret_key=env.get("SECRET_KEY") or None,
             google_client_id=cid,
             google_client_secret=secret,

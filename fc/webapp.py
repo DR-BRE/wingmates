@@ -128,7 +128,7 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
     def guard():
         if urlsplit("//" + request.host).hostname not in allowed_hosts:
             raise ApiError("unknown host", 403)
-        if (google and request.method == "GET" and request.host != base_host
+        if (google and request.method == "GET" and request.host.lower() != base_host
                 and not request.path.startswith(("/api/", "/static/"))):
             # Google returns people to the configured address, and cookies do
             # not carry between localhost and 127.0.0.1, so pages move there
@@ -300,7 +300,12 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
         @app.get("/auth/login")
         def auth_login():
             session["next"] = safe_next(request.args.get("next"))
-            return sign_in.begin(config.base_url + "/auth/callback")
+            try:
+                return sign_in.begin(config.base_url + "/auth/callback")
+            except Exception as e:                    # noqa: BLE001
+                app.logger.warning("could not start Google sign-in: %s",
+                                   type(e).__name__)
+                return redirect("/login?error=1")
 
         @app.get("/auth/callback")
         def auth_callback():
@@ -337,7 +342,9 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
             return jsonify(ok=True)
 
     # ----------------------------------------------------------- dev users
-    if config.dev_users:
+    # Never with sign-in on, whatever the Config says: this route lets the
+    # caller become any user.
+    if config.dev_users and not google:
         @app.post("/dev/login")
         def dev_login():
             raw = body().get("username")

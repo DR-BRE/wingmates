@@ -78,5 +78,26 @@ class TestConfig(unittest.TestCase):
         self.assertNotIn("shh", text)
         self.assertNotIn("key-material", text)
 
+class TestBaseUrl(unittest.TestCase):
+
+    def test_it_is_normalised(self):
+        for raw, want in (("http://LocalHost:8817/", "http://localhost:8817"),
+                          ("http://localhost:80", "http://localhost"),
+                          ("HTTPS://Wing.Example:443", "https://wing.example"),
+                          ("https://wing.example:8443", "https://wing.example:8443"),
+                          ("http://[::1]:8817", "http://[::1]:8817")):
+            self.assertEqual(Config(base_url=raw).base_url, want)
+            self.assertEqual(
+                Config.from_env({"WINGMATES_BASE_URL": raw}).base_url, want)
+
+    def test_a_malformed_one_is_refused(self):
+        for bad in ("localhost:8817", "ftp://localhost", "http://",
+                    "http://user@localhost:8817", "http://localhost/app",
+                    "http://localhost?x=1", "http://localhost:notaport", ""):
+            with self.assertRaises(ValueError, msg=bad) as cm:
+                Config(base_url=bad)
+            self.assertIn("WINGMATES_BASE_URL", str(cm.exception))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

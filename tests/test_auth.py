@@ -4,10 +4,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import requests
+from flask import Flask
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fc.auth import persistent_key, safe_next
+from fc.auth import GoogleSignIn, persistent_key, safe_next
 
 
 class TestSafeNext(unittest.TestCase):
@@ -44,6 +48,46 @@ class TestPersistentKey(unittest.TestCase):
         self.dir.mkdir(parents=True)
         (self.dir / "secret_key").write_text("")
         self.assertEqual(len(persistent_key(self.dir)), 64)
+
+
+class Unrelated(Exception):
+    """Stands for the JOSE library's errors, which share no base class with
+    Authlib's own."""
+
+
+class TestGoogleSignInFailsClosed(unittest.TestCase):
+    """finish() is the gate: whatever goes wrong while completing a sign-in,
+    the answer must be "nobody signed in", never a crash."""
+
+    def setUp(self):
+        self.app = Flask("signin-test")
+        self.app.secret_key = "test-key"
+        self.sign = GoogleSignIn(self.app, "id", "secret")
+
+    def finish(self, **outcome):
+        with self.app.test_request_context("/auth/callback?code=c&state=s"):
+            with mock.patch.object(self.sign._oauth.google,
+                                   "authorize_access_token", **outcome):
+                return self.sign.finish()
+
+    def test_any_failure_to_complete_is_nobody_signed_in(self):
+        for exc in (Unrelated("bad signature"), requests.ConnectionError("down"),
+                    requests.Timeout(), KeyError("id_token"), ValueError("junk")):
+            with self.assertLogs(self.app.logger, "WARNING") as logs:
+                self.assertIsNone(self.finish(side_effect=exc), type(exc).__name__)
+            # The log names the kind of failure and nothing else.
+            self.assertIn(type(exc).__name__, logs.output[0])
+            self.assertNotIn(str(exc) or "~", logs.output[0])
+
+    def test_a_token_without_a_subject_is_nobody_signed_in(self):
+        self.assertIsNone(self.finish(return_value={}))
+        self.assertIsNone(self.finish(return_value={"userinfo": {"email": "a@b.c"}}))
+
+    def test_a_verified_profile_is_returned(self):
+        info = {"sub": "g-1", "email": "a@b.c", "name": "A", "picture": "https://p/x"}
+        self.assertEqual(self.finish(return_value={"userinfo": info}),
+                         {"sub": "g-1", "email": "a@b.c", "name": "A",
+                          "picture_url": "https://p/x"})
 
 
 if __name__ == "__main__":

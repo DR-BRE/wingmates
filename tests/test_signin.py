@@ -260,5 +260,39 @@ class TestLocalModeIsUnchanged(unittest.TestCase):
         self.assertEqual(self.client.get("/api/me").get_json()["username"], "you")
 
 
+class TestReviewFindings(SignInCase):
+
+    def google_app(self, **over):
+        settings = dict(auth="google", live=False, data_dir=self.dir, base_url=BASE,
+                        google_client_id="id", google_client_secret="secret")
+        return create_app(Config(**{**settings, **over}), airports=self.airports,
+                          sign_in=self.google)
+
+    def test_a_sign_in_that_cannot_start_returns_to_the_sign_in_page(self):
+        def unreachable(redirect_uri):
+            raise RuntimeError("could not reach Google")
+        self.google.begin = unreachable
+        with self.assertLogs(self.app.logger, "WARNING"):
+            r = self.client.get("/auth/login")
+        self.assertEqual((r.status_code, r.headers["Location"]),
+                         (302, "/login?error=1"))
+
+    def test_user_switching_never_exists_with_sign_in_on(self):
+        app = self.google_app(dev_users=True)
+        client = app.test_client()
+        self.google.profile = BRETT
+        client.get(client.get("/auth/login").headers["Location"])
+        client.post("/api/username", json={"username": "brett"}, headers=ORIGIN)
+        self.users.create("Victim", "victim")
+        r = client.post("/dev/login", json={"username": "victim"}, headers=ORIGIN)
+        self.assertEqual(r.status_code, 404)
+        self.assertEqual(client.get("/api/me").get_json()["username"], "brett")
+
+    def test_the_spelling_of_the_base_url_cannot_cause_a_redirect_loop(self):
+        for base in ("http://LocalHost", "http://localhost:80", "http://localhost/"):
+            with self.google_app(base_url=base).test_client().get("/login") as r:
+                self.assertEqual(r.status_code, 200, base)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
