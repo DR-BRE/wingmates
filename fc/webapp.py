@@ -1,20 +1,23 @@
 """The Flask app: every HTTP route. The only module that knows about requests.
 
-There is no real sign-in yet. Every request acts as the local user, unless
-dev users are enabled and the session names another one.
+Two auth modes. In `local` every request acts as the local user (or a made-up
+one, when dev users are on). In `google` the session names the signed-in
+account, and nothing under /api/ answers without one.
 """
 from __future__ import annotations
 
 import secrets
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from flask import (Flask, Response, g, jsonify, request, send_from_directory,
-                   session)
+from flask import (Flask, Response, g, jsonify, redirect, request,
+                   send_from_directory, session)
 from werkzeug.exceptions import HTTPException
 
 from .adsb import FeedError
 from .airports import Airports
+from .auth import GoogleSignIn, persistent_key, safe_next
 from .config import Config
 from .history import OPTIONAL, History, template_csv
 from .mates import Mates
@@ -25,6 +28,8 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 # The largest id SQLite can hold. Anything beyond it cannot name a row.
 MAX_ID = 2 ** 63 - 1
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+# Routes a signed-in person may use before choosing a username.
+USERNAME_FREE = frozenset({"/api/me", "/api/username", "/api/account/delete"})
 
 
 class ApiError(Exception):
@@ -34,10 +39,15 @@ class ApiError(Exception):
         self.status = status
 
 
-def create_app(config: Config, tracker=None,
-               airports: Airports | None = None) -> Flask:
+def create_app(config: Config, tracker=None, airports: Airports | None = None,
+               sign_in=None) -> Flask:
+    google = config.auth == "google"
     app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="/static")
-    app.secret_key = config.secret_key or secrets.token_hex(32)
+    # Real accounts need a key that survives restarts, or everyone is signed
+    # out each time. Local mode has nothing to keep.
+    app.secret_key = config.secret_key or (
+        persistent_key(config.data_dir) if google else secrets.token_hex(32))
+    app.permanent_session_lifetime = timedelta(days=30)
     app.config.update(
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
@@ -48,12 +58,18 @@ def create_app(config: Config, tracker=None,
     history = History(airports, config.db_path)
     users = Users(config.db_path)
     mates = Mates(users, history)
+    if google and sign_in is None:
+        sign_in = GoogleSignIn(app, config.google_client_id,
+                               config.google_client_secret)
+    base_host = urlsplit(config.base_url).netloc
 
     # ------------------------------------------------------------- helpers
-    def current_user() -> dict:
-        if config.dev_users:
-            uid = session.get("uid")
-            user = users.get(uid) if uid else None
+    def current_user() -> dict | None:
+        uid = session.get("uid")
+        if google:
+            return users.get(uid) if uid else None
+        if config.dev_users and uid:
+            user = users.get(uid)
             if user:
                 return user
         return users.ensure_local()
@@ -112,14 +128,27 @@ def create_app(config: Config, tracker=None,
     def guard():
         if urlsplit("//" + request.host).hostname not in allowed_hosts:
             raise ApiError("unknown host", 403)
+        if (google and request.method == "GET" and request.host != base_host
+                and not request.path.startswith(("/api/", "/static/"))):
+            # Google returns people to the configured address, and cookies do
+            # not carry between localhost and 127.0.0.1, so pages move there
+            # before sign-in starts.
+            return redirect(config.base_url + request.full_path.rstrip("?"))
         if request.method == "POST":
             origin = urlsplit(request.headers.get("Origin", "")).netloc
             if not origin or origin != request.host:
                 raise ApiError("cross-site request refused", 403)
             if not request.is_json:
                 raise ApiError("requests must be JSON", 403)
+        if request.path.startswith("/static/"):
+            return None
+        g.user = current_user()
         if request.path.startswith(("/api/", "/dev/")):
-            g.user = current_user()
+            if g.user is None:
+                raise ApiError("sign in required", 401)
+            if g.user["username"] is None and request.path not in USERNAME_FREE:
+                raise ApiError("choose a username first", 409)
+        return None
 
     @app.after_request
     def caching(resp: Response) -> Response:
@@ -130,7 +159,27 @@ def create_app(config: Config, tracker=None,
     # --------------------------------------------------------------- pages
     @app.get("/")
     def index():
+        if google and g.user is None:
+            return redirect("/login")
+        if google and g.user["username"] is None:
+            return redirect("/welcome")
         return send_from_directory(WEB_DIR, "index.html")
+
+    @app.get("/login")
+    def login_page():
+        if not google or g.user is not None:
+            return redirect("/")
+        return send_from_directory(WEB_DIR, "login.html")
+
+    @app.get("/welcome")
+    def welcome_page():
+        if not google:
+            return redirect("/")
+        if g.user is None:
+            return redirect("/login")
+        if g.user["username"] is not None:
+            return redirect("/")
+        return send_from_directory(WEB_DIR, "welcome.html")
 
     @app.get("/api/me")
     def me():
@@ -245,6 +294,47 @@ def create_app(config: Config, tracker=None,
         if routes is None:
             raise ApiError("not found", 404)
         return jsonify(routes=routes)
+
+    # ------------------------------------------------------------- sign-in
+    if google:
+        @app.get("/auth/login")
+        def auth_login():
+            session["next"] = safe_next(request.args.get("next"))
+            return sign_in.begin(config.base_url + "/auth/callback")
+
+        @app.get("/auth/callback")
+        def auth_callback():
+            profile = sign_in.finish()
+            if profile is None:
+                return redirect("/login?error=1")
+            user = users.upsert_google(**profile)
+            target = safe_next(session.get("next"))
+            # Start a clean session: nothing from before sign-in carries over.
+            session.clear()
+            session["uid"] = user["id"]
+            session.permanent = True
+            return redirect(target)
+
+        @app.post("/auth/logout")
+        def auth_logout():
+            session.clear()
+            return jsonify(ok=True)
+
+        @app.post("/api/username")
+        def choose_username():
+            try:
+                return jsonify(users.set_username(g.user["id"],
+                                                  body().get("username")))
+            except ValueError as e:
+                raise ApiError(str(e)) from None
+
+        @app.post("/api/account/delete")
+        def account_delete():
+            if body().get("confirm") != "DELETE":
+                raise ApiError("type DELETE to confirm")
+            users.delete(g.user["id"])
+            session.clear()
+            return jsonify(ok=True)
 
     # ----------------------------------------------------------- dev users
     if config.dev_users:

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Wingmates</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="gate">
+<main class="gatebox">
+  <div class="brand"><span class="glyph">✈</span> WING<span class="dim">MATES</span></div>
+  <h1>Your flights on a globe, with your mates.</h1>
+  <a class="gatebtn" href="/auth/login">Continue with Google</a>
+  <p class="hint error" id="err" hidden>Sign-in didn't finish. Please try again.</p>
+  <p class="hint">Wingmates uses your Google name and picture. It never sees
+     your password and never reads your email.</p>
+</main>
+<script>
+if (new URLSearchParams(location.search).has('error')) {
+  document.getElementById('err').hidden = false;
+}
+</script>
+</body>
+</html>

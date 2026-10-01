@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Choose a username — Wingmates</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="gate">
+<main class="gatebox">
+  <div class="brand"><span class="glyph">✈</span> WING<span class="dim">MATES</span></div>
+  <h1>Choose your username</h1>
+  <form id="name-form" autocomplete="off">
+    <div class="row">
+      <input id="username" placeholder="username" spellcheck="false"
+             autocapitalize="none" autofocus required minlength="3"
+             maxlength="21" aria-label="Username">
+      <button type="submit" id="name-btn">Continue</button>
+    </div>
+    <p class="hint" id="name-hint">3 to 20 characters: letters, digits and
+       underscore. This is how mates find you, and it can't be changed later.</p>
+  </form>
+  <button class="quiet" id="out">Sign out</button>
+</main>
+<script>
+const send = (path, body) => fetch(path, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body || {}) });
+
+document.getElementById('name-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const hint = document.getElementById('name-hint');
+  const res = await send('/api/username',
+                         { username: document.getElementById('username').value });
+  if (res.ok) { location.href = '/'; return; }
+  if (res.status === 401) { location.href = '/login'; return; }
+  const data = await res.json().catch(() => ({ error: 'Something went wrong.' }));
+  hint.className = 'hint error';
+  hint.textContent = data.error;
+});
+
+document.getElementById('out').addEventListener('click', async () => {
+  await send('/auth/logout');
+  location.href = '/login';
+});
+</script>
+</body>
+</html>
