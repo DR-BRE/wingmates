@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fc.airports import Airports
 from fc.history import History, great_circle_km, template_csv
+from fc.users import Users
 
 AIRPORTS_CSV = """iata,icao,name,city,country,lat,lon,size
 ATL,KATL,Hartsfield Jackson Atlanta International Airport,Atlanta,US,33.6367,-84.4281,3
@@ -24,7 +25,10 @@ class HistoryCase(unittest.TestCase):
         d = Path(self.tmp.name)
         (d / "airports.csv").write_text(AIRPORTS_CSV)
         self.airports = Airports(d / "airports.csv")
-        self.h = History(self.airports, d / "flights.db")
+        self.store = History(self.airports, d / "flights.db")
+        self.users = Users(d / "flights.db")
+        self.uid = self.users.create("Ann", "ann")["id"]
+        self.h = self.store.for_user(self.uid)
 
 
 class TestAirports(HistoryCase):
@@ -72,7 +76,7 @@ class TestAdd(HistoryCase):
 
     def test_survives_reopening_the_database(self):
         self.h.add("2024-03-09", "ATL", "LHR")
-        again = History(self.airports, self.h.path)
+        again = History(self.airports, self.h.path).for_user(self.uid)
         self.assertEqual(len(again.list()), 1)
 
 
@@ -158,6 +162,58 @@ class TestImport(HistoryCase):
         with self.assertRaises(ValueError) as cm:
             self.h.import_csv("date,from\n2024-03-09,ATL\n")
         self.assertIn("to", str(cm.exception))
+
+
+class TestIsolation(HistoryCase):
+
+    def setUp(self):
+        super().setUp()
+        self.other = self.store.for_user(self.users.create("Bob", "bob")["id"])
+
+    def test_each_user_sees_only_their_own_flights_and_stats(self):
+        self.h.add("2024-03-09", "ATL", "LHR")
+        self.other.add("2024-05-01", "ATL", "JFK")
+        self.assertEqual([f["to"]["iata"] for f in self.h.list()], ["LHR"])
+        self.assertEqual([f["to"]["iata"] for f in self.other.list()], ["JFK"])
+        self.assertEqual(self.h.stats()["flights"], 1)
+        self.assertEqual(self.other.snapshot()["stats"]["airports"], 2)
+
+    def test_another_users_flight_looks_exactly_like_a_missing_one(self):
+        f = self.h.add("2024-03-09", "ATL", "LHR")
+        self.assertIsNone(self.other.get(f["id"]))
+        self.assertIsNone(self.other.update(f["id"], "2024-03-10", "ATL", "JFK"))
+        self.assertFalse(self.other.delete(f["id"]))
+        self.assertEqual(self.h.get(f["id"])["to"]["iata"], "LHR")
+
+    def test_import_duplicates_are_judged_per_user(self):
+        text = "date,from,to\n2024-03-09,ATL,LHR\n"
+        self.h.import_csv(text)
+        self.assertEqual(self.other.import_csv(text)["added"], 1)
+        self.assertEqual(self.h.import_csv(text)["skipped"], 1)
+
+    def test_deleting_a_user_removes_their_flights_only(self):
+        self.h.add("2024-03-09", "ATL", "LHR")
+        self.other.add("2024-05-01", "ATL", "JFK")
+        self.users.delete(self.uid)
+        self.assertEqual(self.h.list(), [])
+        self.assertEqual(len(self.other.list()), 1)
+
+
+class TestExport(HistoryCase):
+
+    def test_export_starts_with_the_template_header(self):
+        self.assertEqual(self.h.export_csv(), template_csv())
+
+    def test_export_imports_back_to_the_same_flights(self):
+        self.h.add("2024-03-09", "ATL", "LHR", airline="Delta",
+                   flight_number="DL30", aircraft="A333", seat="34A",
+                   notes='window, "left" side')
+        self.h.add("2020-01-01", "ATL", "JFK")
+        other = self.store.for_user(self.users.create("Bob", "bob")["id"])
+        self.assertEqual(other.import_csv(self.h.export_csv()),
+                         {"added": 2, "skipped": 0, "errors": []})
+        strip = lambda fs: [{k: v for k, v in f.items() if k != "id"} for f in fs]
+        self.assertEqual(strip(other.list()), strip(self.h.list()))
 
 
 if __name__ == "__main__":
