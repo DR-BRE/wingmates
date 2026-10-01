@@ -56,6 +56,42 @@ class Users:
             raise ValueError(f"the username {username!r} is taken") from None
         return self.get(uid)
 
+    def upsert_google(self, sub: str, email: str | None, name: str | None,
+                      picture_url: str | None) -> dict:
+        """The account for this Google identity, created on first sign-in and
+        refreshed on every later one. Keyed on `sub`, which never changes, so
+        a new email address does not make a second account."""
+        name = (name or "").strip() or (email or "").split("@")[0] or "Wingmate"
+        with closing(connect(self.path)) as db, db:
+            row = db.execute("SELECT id FROM users WHERE google_sub = ?",
+                             (sub,)).fetchone()
+            if row:
+                uid = row["id"]
+                db.execute("UPDATE users SET email = ?, name = ?, picture_url = ?"
+                           " WHERE id = ?", (email, name, picture_url, uid))
+            else:
+                uid = db.execute(
+                    "INSERT INTO users (google_sub, email, name, picture_url,"
+                    " created_at) VALUES (?,?,?,?,?)",
+                    (sub, email, name, picture_url,
+                     datetime.now(UTC).isoformat())).lastrowid
+        return self.get(uid)
+
+    def set_username(self, user_id: int, raw: str) -> dict:
+        """Choose a username. Allowed once: the UPDATE only matches a user
+        that has none, so a second attempt changes nothing."""
+        username = validate_username(raw)
+        try:
+            with closing(connect(self.path)) as db, db:
+                changed = db.execute(
+                    "UPDATE users SET username = ? WHERE id = ?"
+                    " AND username IS NULL", (username, user_id)).rowcount
+        except sqlite3.IntegrityError:
+            raise ValueError(f"the username {username!r} is taken") from None
+        if not changed:
+            raise ValueError("you already have a username")
+        return self.get(user_id)
+
     def get(self, user_id: int) -> dict | None:
         with closing(connect(self.path)) as db:
             return self._public(db.execute(

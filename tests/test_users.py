@@ -72,5 +72,79 @@ class TestUsers(UsersCase):
         self.assertNotEqual(self.users.create("New Ann", "ann")["id"], u["id"])
 
 
+class TestGoogleAccounts(UsersCase):
+
+    def google(self, sub="g-1", email="brett@example.com", name="Brett F",
+               picture_url="https://img.example/b.png"):
+        return self.users.upsert_google(sub, email, name, picture_url)
+
+    def test_first_sign_in_creates_an_account_without_a_username(self):
+        u = self.google()
+        self.assertEqual(set(u), {"id", "username", "name", "picture_url"})
+        self.assertEqual((u["username"], u["name"], u["picture_url"]),
+                         (None, "Brett F", "https://img.example/b.png"))
+
+    def test_later_sign_ins_refresh_the_profile_and_keep_the_account(self):
+        first = self.google()
+        self.users.set_username(first["id"], "brett")
+        again = self.google(email="new@example.com", name="Brett Francoeur",
+                            picture_url=None)
+        self.assertEqual((again["id"], again["username"], again["name"],
+                          again["picture_url"]),
+                         (first["id"], "brett", "Brett Francoeur", None))
+
+    def test_a_different_sub_is_a_different_account_even_with_the_same_email(self):
+        self.assertNotEqual(self.google("g-1")["id"], self.google("g-2")["id"])
+
+    def test_a_profile_without_a_name_gets_a_usable_one(self):
+        self.assertEqual(self.google(name=None)["name"], "brett")
+        self.assertEqual(self.google("g-2", email=None, name="  ")["name"],
+                         "Wingmate")
+
+    def test_an_account_without_a_username_cannot_be_looked_up(self):
+        self.google()
+        self.assertIsNone(self.users.by_username(""))
+        self.assertIsNone(self.users.by_username("None"))
+
+
+class TestSetUsername(UsersCase):
+
+    def setUp(self):
+        super().setUp()
+        self.uid = self.users.upsert_google("g-1", "a@example.com", "A", None)["id"]
+
+    def test_it_is_normalised_and_stored(self):
+        self.assertEqual(self.users.set_username(self.uid, " @Brett ")["username"],
+                         "brett")
+        self.assertEqual(self.users.by_username("brett")["id"], self.uid)
+
+    def test_it_can_only_be_set_once(self):
+        self.users.set_username(self.uid, "brett")
+        with self.assertRaises(ValueError) as cm:
+            self.users.set_username(self.uid, "other")
+        self.assertIn("already", str(cm.exception))
+        self.assertEqual(self.users.get(self.uid)["username"], "brett")
+
+    def test_malformed_reserved_and_taken_names_are_refused(self):
+        self.users.create("Ann", "ann")
+        for bad, word in (("ab", "3 to 20"), ("admin", "reserved"),
+                          ("ANN", "taken")):
+            with self.assertRaises(ValueError) as cm:
+                self.users.set_username(self.uid, bad)
+            self.assertIn(word, str(cm.exception))
+        self.assertIsNone(self.users.get(self.uid)["username"])
+
+    def test_the_second_of_two_people_choosing_a_name_is_told_it_is_taken(self):
+        other = self.users.upsert_google("g-2", "b@example.com", "B", None)["id"]
+        self.users.set_username(other, "brett")
+        with self.assertRaises(ValueError) as cm:
+            self.users.set_username(self.uid, "brett")
+        self.assertIn("taken", str(cm.exception))
+
+    def test_a_missing_user_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.users.set_username(999, "brett")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
