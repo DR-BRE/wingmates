@@ -32,8 +32,8 @@ by Google, so it can be published later without a review.
    `http://localhost:8817/auth/callback`
 3. Press **Create**.
 
-Add the hosted address here as well when the app is deployed, in the form
-`https://your-host/auth/callback`.
+When the app is deployed, add its address here too: see
+[deploy-render.md](deploy-render.md).
 
 ## 5. Save the secret
 

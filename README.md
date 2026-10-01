@@ -30,6 +30,9 @@ By default there is no sign-in: on your own machine every request acts as one
 local user, `@you`. To have people sign in with Google, see
 [docs/google-sign-in-setup.md](docs/google-sign-in-setup.md).
 
+To put it on the internet for friends, see
+[docs/deploy-render.md](docs/deploy-render.md).
+
 ### Settings
 
 | Variable | Default | Effect |
@@ -158,8 +161,8 @@ a new client module and a wider `Position`, not a rewrite.
 
 ## Not built yet
 
-Hosting. Until then it runs on one machine. Importing from calendar events
-or email confirmations is also not built.
+Importing from calendar events or email confirmations, blocking and
+reporting, and a custom domain.
 
 ## Layout
 
@@ -177,9 +180,11 @@ fc/users.py             user records and username rules
 fc/mates.py             mate requests, pairs, and what a mate may see
 fc/auth.py              Google sign-in
 fc/webapp.py            Flask app: every HTTP route
+fc/hosted.py, wsgi.py   the app as a hosted server runs it (gunicorn)
+Dockerfile, render.yaml the container and the Render service
 web/social.js           Social tab
 web/login.html, welcome.html   sign-in and choose-a-username pages
-requirements.txt        Flask, Authlib, requests
+requirements.txt        Flask, Authlib, requests, gunicorn
 data/airports.csv       airport table (OurAirports, public domain)
 web/index.html          page: My flights / Live tabs, map and globe
 web/app.js              live tracker UI and the flat map (Leaflet)
@@ -202,6 +207,7 @@ GET  /auth/login, /auth/callback     Google sign-in            (google mode)
 POST /auth/logout                    sign out                  (google mode)
 POST /api/username {username}        choose a username, once   (google mode)
 POST /api/account/delete {confirm}   delete your account       (google mode)
+GET  /healthz                        health check for the host
 GET  /api/me                         the current user and feature flags
 GET  /api/history/export.csv         your flights as CSV
 GET  /api/social                     you, your mates with stats, pending requests
