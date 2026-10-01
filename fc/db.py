@@ -3,6 +3,7 @@ format. Stores build on this; nothing here knows about HTTP.
 """
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import sqlite3
@@ -91,8 +92,14 @@ def _version(db: sqlite3.Connection) -> int:
 
 def _make_private(path: Path) -> None:
     """The database holds email addresses: owner-readable only."""
-    if path.exists() and (path.stat().st_mode & 0o777) != 0o600:
-        os.chmod(path, 0o600)
+    try:
+        if path.exists() and (path.stat().st_mode & 0o777) != 0o600:
+            os.chmod(path, 0o600)
+    except OSError as e:
+        # Some mounted disks refuse chmod. Tightening permissions is a
+        # precaution; failing to must not stop the server starting.
+        logging.getLogger(__name__).warning(
+            "could not restrict %s to its owner: %s", path, type(e).__name__)
 
 
 def init(path: Path) -> None:

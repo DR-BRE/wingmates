@@ -355,5 +355,25 @@ class TestHealth(WebCase):
         self.assertEqual(self.post("/healthz").status_code, 405)
 
 
+class TestBodyCap(WebCase):
+    """On a shared site one signed-in person must not be able to exhaust the
+    server's memory or the disk everyone shares with a single request."""
+
+    ROW = "2024-03-09,ATL,LHR\n"
+
+    def test_an_oversized_request_is_refused(self):
+        big = "date,from,to\n" + self.ROW * 200_000          # about 3.8 MB
+        r = self.post("/api/history/import", {"csv": big})
+        self.assertEqual(r.status_code, 413)
+        self.assertIn("error", r.get_json())
+        self.assertEqual(self.client.get("/api/history").get_json()["flights"], [])
+
+    def test_a_long_real_history_still_fits(self):
+        rows = "".join(f"20{y:02d}-{m:02d}-15,ATL,LHR\n"
+                       for y in range(0, 26) for m in range(1, 13)) * 10
+        r = self.post("/api/history/import", {"csv": "date,from,to\n" + rows})
+        self.assertEqual((r.status_code, r.get_json()["added"]), (200, 312))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

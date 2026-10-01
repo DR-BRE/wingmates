@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -182,6 +183,18 @@ class TestUpgradeFromV1(DbCase):
             self.assertEqual(c.execute(
                 "SELECT session_epoch FROM users WHERE id = ?",
                 (uid,)).fetchone()[0], 0)
+
+
+class TestPermissionsAreBestEffort(DbCase):
+
+    def test_a_disk_that_refuses_chmod_does_not_stop_the_server_starting(self):
+        with mock.patch("fc.db.os.chmod", side_effect=PermissionError("refused")):
+            with self.assertLogs("fc.db", "WARNING") as logs:
+                db.init(self.path)
+        self.assertIn("flights.db", logs.output[0])
+        with closing(db.connect(self.path)) as c:
+            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0],
+                             db.SCHEMA_VERSION)
 
 
 if __name__ == "__main__":

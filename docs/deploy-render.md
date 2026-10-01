@@ -41,6 +41,12 @@ Render shows the service's address, like `https://wingmates-ab12.onrender.com`.
 4. Add each friend's Google address under **Audience**, **Test users** in the
    Google console, then send them the address.
 
+**That test users list is your invite list.** While the Google app's
+publishing status is **Testing**, only the people on it can sign in. Wingmates
+itself has no invite system: if you switch the Google app to **In
+production**, anyone with a Google account who finds the address can create an
+account. Leave it in Testing unless that is what you want.
+
 ## Updating
 
 Every push to `main` deploys automatically. Because the service has a disk,

@@ -30,6 +30,9 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 # The largest id SQLite can hold. Anything beyond it cannot name a row.
 MAX_ID = 2 ** 63 - 1
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+# The largest request accepted. A lifetime of flights as CSV is well under
+# 100 KB; without a cap, one request could exhaust memory or the shared disk.
+MAX_REQUEST_BYTES = 2 * 1024 * 1024
 # Routes a signed-in person may use before choosing a username.
 USERNAME_FREE = frozenset({"/api/me", "/api/username", "/api/account/delete"})
 
@@ -55,6 +58,7 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_SECURE=config.base_url.startswith("https://"),
         SEND_FILE_MAX_AGE_DEFAULT=0,
+        MAX_CONTENT_LENGTH=MAX_REQUEST_BYTES,
     )
 
     history = History(airports, config.db_path)
