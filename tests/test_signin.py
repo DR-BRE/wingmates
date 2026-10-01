@@ -396,5 +396,54 @@ class TestHosted(unittest.TestCase):
         self.assertEqual(len(after.get("/api/history").get_json()["flights"]), 1)
 
 
+    def turso_env(self, **over):
+        return {"WINGMATES_AUTH": "google", "GOOGLE_CLIENT_ID": "id",
+                "GOOGLE_CLIENT_SECRET": "secret", "SECRET_KEY": "a-fixed-key",
+                "TURSO_DATABASE_URL": "libsql://wm-test.turso.io",
+                "TURSO_AUTH_TOKEN": "test-token",
+                "WINGMATES_DATA_DIR": str(self.dir / "must-not-be-created"),
+                "WINGMATES_BASE_URL": BASE, **over}
+
+    def with_fake_turso(self):
+        from unittest import mock
+        from tests.fake_turso import FakeTurso
+        fake = FakeTurso(self.dir / "remote.db")
+        patcher = mock.patch("fc.turso.send", fake.send)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return fake
+
+    def test_on_turso_it_refuses_to_start_without_a_secret_key(self):
+        self.with_fake_turso()
+        env = self.turso_env()
+        del env["SECRET_KEY"]
+        with self.assertRaises(RuntimeError) as cm:
+            build(env, sign_in=self.google)
+        self.assertIn("SECRET_KEY", str(cm.exception))
+
+    def test_on_turso_it_runs_without_writing_any_file(self):
+        fake = self.with_fake_turso()
+        app = build(self.turso_env(), sign_in=self.google)
+        client = app.test_client()
+        client.set_cookie("session", self.signed_in_cookie(app))
+        client.post("/api/username", json={"username": "brett"}, headers=ORIGIN)
+        client.post("/api/history", headers=ORIGIN,
+                    json={"date": "2024-03-09", "from": "ATL", "to": "LHR"})
+        self.assertEqual(len(client.get("/api/history").get_json()["flights"]), 1)
+        self.assertEqual(client.get("/healthz").get_json(), {"ok": True})
+        self.assertGreater(len(fake.calls), 0)
+        self.assertFalse((self.dir / "must-not-be-created").exists())
+
+    def test_on_turso_an_unreachable_database_fails_the_health_check(self):
+        import sqlite3
+        from unittest import mock
+        self.with_fake_turso()
+        client = build(self.turso_env(), sign_in=self.google).test_client()
+        with mock.patch("fc.turso.send",
+                        side_effect=sqlite3.OperationalError("database unreachable")):
+            r = client.get("/healthz")
+        self.assertEqual((r.status_code, r.get_json()), (503, {"ok": False}))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -355,6 +355,14 @@ class TestHealth(WebCase):
         self.assertEqual(self.post("/healthz").status_code, 405)
 
 
+    def test_a_data_folder_with_awkward_characters_still_reports_healthy(self):
+        odd = self.dir / "q?mark #1 100%"
+        odd.mkdir()
+        app = create_app(Config(data_dir=odd, live=False), airports=self.airports)
+        self.assertEqual(app.test_client().get("/healthz").get_json(), {"ok": True})
+        self.assertEqual(sorted(p.name for p in odd.iterdir()), ["flights.db"])
+
+
 class TestBodyCap(WebCase):
     """On a shared site one signed-in person must not be able to exhaust the
     server's memory or the disk everyone shares with a single request."""

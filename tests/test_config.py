@@ -107,6 +107,15 @@ class TestBaseUrl(unittest.TestCase):
         self.assertEqual(Config.from_env(both).base_url,
                          "https://wingmates.example")
 
+    def test_on_vercel_it_defaults_to_the_production_address(self):
+        vercel = {"VERCEL_PROJECT_PRODUCTION_URL": "wingmates.vercel.app"}
+        self.assertEqual(Config.from_env(vercel).base_url,
+                         "https://wingmates.vercel.app")
+        both = {**vercel, "WINGMATES_BASE_URL": "https://wingmates.example"}
+        self.assertEqual(Config.from_env(both).base_url,
+                         "https://wingmates.example")
+
+
 class TestTursoSettings(unittest.TestCase):
 
     def test_without_settings_the_database_is_the_local_file(self):

@@ -21,4 +21,8 @@ def build(env: Mapping[str, str] | None = None, sign_in=None) -> Flask:
         raise RuntimeError(
             "a hosted Wingmates needs WINGMATES_AUTH=google: without sign-in, "
             "every visitor would share one account")
+    if config.turso is not None and not config.secret_key:
+        raise RuntimeError(
+            "with a Turso database, SECRET_KEY must be set: a host without a "
+            "disk has nowhere to keep a generated session key")
     return create_app(config, tracker=None, sign_in=sign_in)

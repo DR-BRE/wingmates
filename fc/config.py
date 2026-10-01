@@ -52,13 +52,16 @@ def normalize_base_url(raw: str) -> str:
 
 
 def _base_url(env: Mapping[str, str]) -> str:
-    """The address people use. On Render the service's own hostname is known,
-    so nothing needs setting until a custom domain is added."""
+    """The address people use. On Render and on Vercel the service's own
+    hostname is known, so nothing needs setting until a custom domain is added."""
     explicit = env.get("WINGMATES_BASE_URL")
     if explicit:
         return explicit
-    render_host = env.get("RENDER_EXTERNAL_HOSTNAME")
-    return f"https://{render_host}" if render_host else DEFAULT_BASE_URL
+    for name in ("RENDER_EXTERNAL_HOSTNAME", "VERCEL_PROJECT_PRODUCTION_URL"):
+        host = env.get(name)
+        if host:
+            return f"https://{host}"
+    return DEFAULT_BASE_URL
 
 
 def _google_client(env: Mapping[str, str], data_dir: Path) -> tuple[str, str]:
