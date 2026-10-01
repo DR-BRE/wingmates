@@ -1,0 +1,28 @@
+# Render Blueprint: one web service with a persistent disk.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: wingmates
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /healthz
+    disk:
+      name: wingmates-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: WINGMATES_AUTH
+        value: google
+      - key: WINGMATES_DATA_DIR
+        value: /data
+      # Signs session cookies. Generated once by Render and kept across deploys.
+      - key: SECRET_KEY
+        generateValue: true
+      # Entered in the Render dashboard; never stored in this file.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false

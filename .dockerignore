@@ -1,0 +1,11 @@
+.git
+.venv
+.devdata
+.superpowers
+.claude
+.impeccable
+__pycache__
+*.pyc
+tests
+docs
+README.md
