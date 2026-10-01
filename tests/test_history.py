@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fc.airports import Airports
-from fc.history import History, great_circle_km, template_csv
+from fc.history import MAX_IMPORT_ROWS, History, great_circle_km, template_csv
 from fc.users import Users
 from tests.helpers import database, temp_dir
 
@@ -161,6 +161,25 @@ class TestImport(HistoryCase):
         with self.assertRaises(ValueError) as cm:
             self.h.import_csv("date,from\n2024-03-09,ATL\n")
         self.assertIn("to", str(cm.exception))
+
+
+    def test_a_file_over_the_cap_is_refused_and_adds_nothing(self):
+        text = "date,from,to\n" + "2024-03-09,ATL,LHR\n" * (MAX_IMPORT_ROWS + 1)
+        with self.assertRaises(ValueError) as cm:
+            self.h.import_csv(text)
+        self.assertIn("5,000", str(cm.exception))
+        self.assertEqual(self.h.list(), [])
+
+    def test_a_file_at_the_cap_is_accepted(self):
+        days = [f"20{y:02d}-{m:02d}-{d:02d}" for y in range(10, 24)
+                for m in range(1, 13) for d in range(1, 29)]
+        self.assertGreaterEqual(len(days), MAX_IMPORT_ROWS - 300)
+        text = "date,from,to\n" + "".join(f"{day},ATL,LHR\n" for day in days)
+        self.assertEqual(self.h.import_csv(text)["added"], len(days))
+
+    def test_blank_lines_do_not_count_towards_the_cap(self):
+        text = "date,from,to\n" + "\n" * (MAX_IMPORT_ROWS + 50) + "2024-03-09,ATL,LHR\n"
+        self.assertEqual(self.h.import_csv(text)["added"], 1)
 
 
 class TestIsolation(HistoryCase):

@@ -43,5 +43,17 @@ class TestTheFixtureReallyUsesTurso(unittest.TestCase):
         self.assertFalse((d / "flights.db").exists())
 
 
+class TestImportIsBatchedOnTurso(test_history.HistoryCase):
+    on_turso = True
+
+    def test_a_large_import_takes_a_handful_of_requests(self):
+        days = [f"2024-{m:02d}-{d:02d}" for m in range(1, 13) for d in range(1, 29)]
+        text = "date,from,to\n" + "".join(f"{day},ATL,LHR\n" for day in days)
+        self.fake.calls.clear()
+        self.assertEqual(self.h.import_csv(text)["added"], len(days))   # 336 rows
+        # One read for existing flights, two batches of inserts, one commit.
+        self.assertLessEqual(len(self.fake.calls), 5)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

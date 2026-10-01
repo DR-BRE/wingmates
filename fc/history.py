@@ -24,6 +24,14 @@ EARTH_RADIUS_KM = 6371.0088
 OPTIONAL = ("airline", "flight_number", "aircraft", "seat", "notes")
 TEMPLATE_COLUMNS = ("date", "from", "to") + OPTIONAL
 
+# A lifetime of flights is a few thousand rows. The cap keeps an import inside
+# the few seconds a hosted database allows one transaction.
+MAX_IMPORT_ROWS = 5000
+
+_INSERT = ("INSERT INTO flights (user_id, date, origin, dest, airline,"
+           " flight_number, aircraft, seat, notes, distance_km, created_at)"
+           " VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+
 # Header spellings accepted on import, so a spreadsheet someone already keeps
 # usually works without renaming columns.
 _ALIASES = {
@@ -81,21 +89,17 @@ class UserHistory:
             raise ValueError("origin and destination are the same airport")
         return d, o, t
 
-    def _insert(self, db, d, o, t, extra: dict) -> int:
-        km = great_circle_km(o.lat, o.lon, t.lat, t.lon)
-        cur = db.execute(
-            "INSERT INTO flights (user_id, date, origin, dest, airline,"
-            " flight_number, aircraft, seat, notes, distance_km, created_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (self.user_id, d.isoformat(), o.iata, t.iata,
-             *[(extra.get(k) or "").strip() for k in OPTIONAL],
-             km, datetime.now(UTC).isoformat()))
-        return cur.lastrowid
+    def _values(self, d, o, t, extra: dict) -> tuple:
+        """The row to insert for one flight, in _INSERT's column order."""
+        return (self.user_id, d.isoformat(), o.iata, t.iata,
+                *[(extra.get(k) or "").strip() for k in OPTIONAL],
+                great_circle_km(o.lat, o.lon, t.lat, t.lon),
+                datetime.now(UTC).isoformat())
 
     def add(self, day: str, origin: str, dest: str, **extra) -> dict:
         d, o, t = self._validate(day, origin, dest)
         with closing(connect(self.database)) as db, db:
-            fid = self._insert(db, d, o, t, extra)
+            fid = db.execute(_INSERT, self._values(d, o, t, extra)).lastrowid
         return self.get(fid)
 
     def update(self, flight_id: int, day: str, origin: str, dest: str,
@@ -137,16 +141,24 @@ class UserHistory:
                 + ". The first row must be a header like: "
                 + ",".join(TEMPLATE_COLUMNS))
 
-        added = skipped = 0
+        rows = [(line, raw) for line, raw in enumerate(reader, start=2)
+                if any(c.strip() for c in raw)]
+        if len(rows) > MAX_IMPORT_ROWS:
+            raise ValueError(
+                f"a file can hold at most {MAX_IMPORT_ROWS:,} flights; this one "
+                f"has {len(rows):,}. Split it and import the parts.")
+
+        skipped = 0
         errors: list[dict] = []
+        inserts: list[tuple] = []
         with closing(connect(self.database)) as db, db:
             seen = {(r["date"], r["origin"], r["dest"], r["flight_number"].upper())
                     for r in db.execute(
                         "SELECT * FROM flights WHERE user_id = ?",
                         (self.user_id,))}
-            for line, raw in enumerate(reader, start=2):
-                if not any(c.strip() for c in raw):
-                    continue
+            # Check every row first, then insert the good ones together: on a
+            # hosted database each statement is a network request.
+            for line, raw in rows:
                 row = {c: v.strip() for c, v in zip(cols, raw) if c}
                 try:
                     d, o, t = self._validate(row.get("date", ""),
@@ -160,9 +172,10 @@ class UserHistory:
                     skipped += 1
                     continue
                 seen.add(key)
-                self._insert(db, d, o, t, row)
-                added += 1
-        return {"added": added, "skipped": skipped, "errors": errors}
+                inserts.append(self._values(d, o, t, row))
+            if inserts:
+                db.executemany(_INSERT, inserts)
+        return {"added": len(inserts), "skipped": skipped, "errors": errors}
 
     # ------------------------------------------------------------------ reads
     def _row(self, r: sqlite3.Row) -> dict:
