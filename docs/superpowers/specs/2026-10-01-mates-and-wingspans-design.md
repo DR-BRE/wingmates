@@ -59,7 +59,8 @@ Two settings, read from environment variables, decide how the app behaves.
 | `WINGMATES_DEV_USERS` | `1`, `0` | `0` | Only honoured when auth is `local`. Adds a control to switch between made-up users, for testing the Social page without Google. |
 | `WINGMATES_DATA_DIR` | path | `~/.wingmates` | Where the database and tracker state live. |
 | `WINGMATES_BASE_URL` | URL | `http://localhost:8817` | Used to build the Google redirect address. Cookies are marked Secure when it starts with `https`. |
-| `SECRET_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | secrets | none | Required when auth is `google`. The app refuses to start without them. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | secrets | from `<data dir>/google-client.json` | The Google client. If neither the variables nor the file Google's console downloads is present when auth is `google`, the app refuses to start. |
+| `SECRET_KEY` | secret | generated, kept in `<data dir>/secret_key` | Signs session cookies. When unset in `google` mode, a key is generated once and stored owner-readable in the data directory, so sign-ins survive a restart. |
 
 `python3 run.py` with nothing set behaves as it does today: one local user,
 Live tab present. It now needs `pip install -r requirements.txt` once.
@@ -203,8 +204,10 @@ answer as for a user who does not exist.
   email address does not create a second account. Name, email and picture are
   refreshed on each sign-in.
 - **First sign-in:** the account has no username yet. Every page redirects to
-  the welcome page, and every `/api/` route except `/api/me` and
-  `/api/username` answers 409, until a username is chosen. A taken, reserved
+  the welcome page, and every `/api/` route except `/api/me`,
+  `/api/username` and `/api/account/delete` answers 409, until a username is
+  chosen. Deleting is allowed so that someone who signs in and changes their
+  mind can leave. A taken, reserved
   or badly formed username is refused with a message saying which.
 - The session is Flask's signed cookie holding only the user id. It is
   HttpOnly, SameSite=Lax, Secure when the base URL is https, and lasts 30
@@ -225,6 +228,10 @@ answer as for a user who does not exist.
   would pass the same-host check above and could read and change flights.
   To reach the app by another name, such as a LAN address, set
   `WINGMATES_BASE_URL` to it.
+- With sign-in on, a page request that arrives on a different allowed name,
+  such as `127.0.0.1` when the base URL uses `localhost`, is redirected to
+  the base URL. Google returns people to the base URL, and a browser does
+  not share cookies between the two names, so sign-in would otherwise fail.
 
 ## Requests and mates
 
@@ -398,7 +405,8 @@ New tests, all offline, using a temp database and Flask's test client:
   allowed field names. A route flown five times appears once. Routes of a
   non-mate, of a pending-request user and of a missing user all give 404.
 - **Auth.** Every `/api/` route gives 401 when signed out. With no username
-  yet, routes other than `/api/me` and `/api/username` give 409. A `POST` with
+  yet, routes other than `/api/me`, `/api/username` and
+  `/api/account/delete` give 409. A `POST` with
   a foreign or missing `Origin` gives 403. The post-sign-in return address
   rejects anything that is not a local path. Google itself is not called in
   tests; the callback is tested with a stubbed profile.
