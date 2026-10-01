@@ -1,28 +1,41 @@
-# Wingmates — your flight history on a globe, plus a live tracker
+# Wingmates — your flight history on a globe, with your mates
 
-Two things in one app, sharing one map:
+Three things in one app, sharing one map:
 
 - **My flights** — log the flights you've taken (by hand or CSV) and see them
   as arcs on a 3D globe, with totals for flights, miles, airports and countries.
+- **Social** — find people by username, become mates, and compare wingspans.
 - **Live** — track a real aircraft right now from ADS-B data, with a state
   machine that derives departure/landing/descent and an alert feed.
 
-Python stdlib only on the server — **no pip install, no API key, no account.**
-The browser loads its map libraries and textures from public CDNs, so it needs
-an internet connection.
+No API key and no account. The browser loads its map libraries and textures
+from public CDNs, so it needs an internet connection.
 
 ```
 cd wingmates
-python3 run.py
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python run.py
 ```
 
 Opens `http://127.0.0.1:8817`. Press `ctrl-c` to stop. Needs Python 3.11+.
 
 ```
-python3 run.py --port 9000     # different port
-python3 run.py --no-browser    # don't auto-open
-python3 -m unittest discover -s tests -t .   # 40 offline tests
+.venv/bin/python run.py --port 9000     # different port
+.venv/bin/python run.py --no-browser    # don't auto-open
+.venv/bin/python -m unittest discover -s tests -t .   # offline tests
 ```
+
+There is no sign-in yet: on your own machine every request acts as one local
+user, `@you`. Google sign-in and hosting are the next two steps.
+
+### Settings
+
+| Variable | Default | Effect |
+|---|---|---|
+| `WINGMATES_LIVE` | `1` | `0` turns off the live tracker and hides the Live tab. |
+| `WINGMATES_DEV_USERS` | `0` | `1` adds a box in the header to switch between made-up users, for trying the Social tab. Never enable this on a server others can reach. |
+| `WINGMATES_DATA_DIR` | `~/.wingmates` | Where `flights.db` and `state.json` live. |
 
 ## My flights
 
@@ -31,7 +44,7 @@ Everything here is stored locally in `~/.wingmates/flights.db` (SQLite).
 | | |
 |---|---|
 | **Add a flight** | From, To and a date are all that's required. Codes can be IATA (`ATL`) or ICAO (`KATL`); typing a city name suggests airports. Airline, flight number, aircraft, seat and notes are optional. After each add, *From* is pre-filled with where you just landed, so connecting legs go quickly. |
-| **Import CSV** | Download the template from the app, fill it in, import it. Bad rows are reported by line number while the good ones still go in. Importing the same file twice adds nothing. |
+| **Import / export CSV** | Download the template from the app, fill it in, import it. Bad rows are reported by line number while the good ones still go in. Importing the same file twice adds nothing. Export downloads all your flights in the same columns. |
 | **Edit / delete** | ✎ loads a flight back into the form and saving recomputes the distance. Delete takes two clicks so a stray tap can't lose a flight. |
 | **Totals** | Flights, great-circle miles, distinct airports, distinct countries. |
 | **Routes** | One arc per airport pair on both the globe and the flat map. Click a flight in the list to frame it. |
@@ -48,6 +61,18 @@ spellings also work (`Origin`, `Destination`, `Carrier`, `Flight No`, …), and 
 byte-order mark from Excel is handled. Two rows with the same date, route and
 flight number count as the same flight; the same route and day with *different*
 flight numbers are kept as two flights.
+
+## Social
+
+| | |
+|---|---|
+| **Find a mate** | Type someone's exact username. There is no browsing or partial search. |
+| **Requests** | Adding someone sends a request they accept or decline. Declining is silent. |
+| **Wingspan** | Total great-circle miles flown, also shown as times around the Earth. Mates are ranked by it. |
+| **Head to head** | Click a mate to compare wingspan, flights, airports and countries, and to draw their routes on the globe in coral beside yours. |
+
+A mate sees your totals and your distinct routes. They never see dates,
+airlines, flight numbers, seats, notes, or how often you flew a route.
 
 ## The globe
 
@@ -128,9 +153,9 @@ a new client module and a wider `Position`, not a rewrite.
 
 ## Not built yet
 
-It is a single-user, local app today. Not yet built: accounts and hosting,
-sharing flights with friends, and importing from calendar events or email
-confirmations.
+Sign-in and hosting. Until then it runs for one person on one machine, with
+made-up users available for trying the Social tab. Importing from calendar
+events or email confirmations is also not built.
 
 ## Layout
 
@@ -142,13 +167,19 @@ fc/statemachine.py      phase detection with hysteresis
 fc/tracker.py           poll loop, registry, alert feed, persistence
 fc/airports.py          airport lookup by code, city or name
 fc/history.py           flight history: SQLite store, CSV import, stats
-fc/server.py            stdlib HTTP API + static serving
+fc/config.py            settings from environment variables
+fc/db.py                SQLite schema and migration
+fc/users.py             user records and username rules
+fc/mates.py             mate requests, pairs, and what a mate may see
+fc/webapp.py            Flask app: every HTTP route
+web/social.js           Social tab
+requirements.txt        Flask
 data/airports.csv       airport table (OurAirports, public domain)
 web/index.html          page: My flights / Live tabs, map and globe
 web/app.js              live tracker UI and the flat map (Leaflet)
 web/history.js          My flights UI: form, list, edit, route drawing
 web/globe.js            3D globe (three.js), loaded as an ES module
-tests/                  40 offline tests — no network required
+tests/                  offline tests — no network required
 ```
 
 ## API
@@ -160,6 +191,14 @@ POST /api/untrack    {key}           live: stop, and archive to the log
 POST /api/poll                       live: force a feed poll now
 GET  /api/nearby?lat=&lon=&dist=     live: aircraft in an area
 GET  /api/aircraft?reg=              live: where is this airframe right now
+
+GET  /api/me                         the current user and feature flags
+GET  /api/history/export.csv         your flights as CSV
+GET  /api/social                     you, your mates with stats, pending requests
+GET  /api/users/lookup?username=     one person's card
+POST /api/mates/request {username}   send a request
+POST /api/mates/<id>/accept | decline | cancel | remove
+GET  /api/mates/<id>/routes          one mate's distinct routes
 
 GET  /api/history                    flights (newest first) and totals
 POST /api/history    {date, from, to, airline?, flight_number?,
