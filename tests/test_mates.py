@@ -248,5 +248,40 @@ class TestPrivacy(MatesCase):
         self.assertEqual(len(self.mates.routes(self.ann, self.bob)), 2)
 
 
+
+class TestDeclineStaysSecret(MatesCase):
+    """A sender must not be able to tell a declined request from an unanswered
+    one, whatever they do next."""
+
+    def test_re_sending_a_withdrawn_request_still_obeys_the_cap(self):
+        self.mates.request(self.ann, "bob")
+        self.mates.decline(self.bob, self.ann)
+        self.mates.cancel(self.ann, self.bob)
+        for i in range(MAX_REQUESTS):
+            self.users.create(f"U{i}", f"user_{i}")
+            self.mates.request(self.ann, f"user_{i}")
+        with self.assertRaises(ValueError) as cm:
+            self.mates.request(self.ann, "bob")
+        self.assertIn(str(MAX_REQUESTS), str(cm.exception))
+        self.assertEqual(len(self.mates.social(self.ann)["outgoing"]),
+                         MAX_REQUESTS)
+
+    def test_a_re_sent_request_is_listed_as_newest_either_way(self):
+        self.users.create("Cy", "cy_")
+        orders = []
+        for declined in (False, True):
+            ann = self.users.create("A", f"ann_{int(declined)}")["id"]
+            bob = self.users.create("B", f"bob_{int(declined)}")
+            self.mates.request(ann, bob["username"])
+            self.mates.request(ann, "cy_")
+            if declined:
+                self.mates.decline(bob["id"], ann)
+            self.mates.cancel(ann, bob["id"])
+            self.mates.request(ann, bob["username"])
+            orders.append([p["name"] for p in
+                           self.mates.social(ann)["outgoing"]])
+        self.assertEqual(orders, [["B", "Cy"], ["B", "Cy"]])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

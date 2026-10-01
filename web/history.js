@@ -243,7 +243,6 @@ $('hist-form').addEventListener('submit', async e => {
   const editing = editingId !== null;
   btn.disabled = true;
   try {
-// in the hist-form submit handler
     const f = await post(editing ? '/api/history/update' : '/api/history', {
       id: editingId,
       date: val('h-date'), from: val('h-from'), to: val('h-to'),

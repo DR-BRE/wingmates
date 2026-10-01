@@ -100,10 +100,6 @@ class Mates:
                 _join(db, from_id, to_id)
             elif mine in _SHOWN:
                 pass
-            elif mine == "withdrawn":
-                db.execute(
-                    "UPDATE mate_requests SET status = 'declined'"
-                    " WHERE from_id = ? AND to_id = ?", (from_id, to_id))
             else:
                 waiting = db.execute(
                     "SELECT COUNT(*) FROM mate_requests WHERE from_id = ?"
@@ -117,10 +113,18 @@ class Mates:
                 db.execute(
                     "DELETE FROM mate_requests WHERE from_id = ? AND to_id = ?",
                     (to_id, from_id))
-                db.execute(
-                    "INSERT INTO mate_requests (from_id, to_id, status,"
-                    " created_at) VALUES (?, ?, 'pending', ?)",
-                    (from_id, to_id, _now()))
+                if mine == "withdrawn":
+                    # Still blocked, but it must look to the sender exactly
+                    # like a fresh request: same cap, same place in the list.
+                    db.execute(
+                        "UPDATE mate_requests SET status = 'declined',"
+                        " created_at = ? WHERE from_id = ? AND to_id = ?",
+                        (_now(), from_id, to_id))
+                else:
+                    db.execute(
+                        "INSERT INTO mate_requests (from_id, to_id, status,"
+                        " created_at) VALUES (?, ?, 'pending', ?)",
+                        (from_id, to_id, _now()))
             relation = _relation(db, from_id, to_id)
         return {**{k: target[k] for k in PERSON_FIELDS}, "relation": relation}
 

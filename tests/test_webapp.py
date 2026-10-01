@@ -266,5 +266,72 @@ class TestSocialRoutes(WebCase):
             self.ann.get(f"/api/mates/{self.bob_id}/routes").status_code, 404)
 
 
+
+class TestBadValues(WebCase):
+
+    def add(self):
+        return self.post("/api/history", {"date": "2024-03-09", "from": "ATL",
+                                          "to": "LHR"}).get_json()
+
+    def test_wrong_typed_flight_fields_are_a_400_not_a_500(self):
+        for body in ({"date": 20240309, "from": "ATL", "to": "LHR"},
+                     {"date": "2024-03-09", "from": 5, "to": "LHR"},
+                     {"date": "2024-03-09", "from": ["ATL"], "to": "LHR"},
+                     {"date": "2024-03-09", "from": "ATL", "to": {"x": 1}}):
+            r = self.post("/api/history", body)
+            self.assertEqual(r.status_code, 400, body)
+            self.assertIn("must be text", r.get_json()["error"])
+
+    def test_an_id_that_is_not_a_whole_number_is_a_400(self):
+        f = self.add()
+        for bad in (True, "1", 1.5, None, [1]):
+            r = self.post("/api/history/delete", {"id": bad})
+            self.assertEqual(r.status_code, 400, repr(bad))
+        r = self.client.post("/api/history/delete", data='{"id": Infinity}',
+                             headers=ORIGIN, content_type="application/json")
+        self.assertEqual(r.status_code, 400)
+        # In particular `true` must not be read as id 1.
+        self.assertEqual(self.client.get("/api/history").get_json()["flights"][0]["id"],
+                         f["id"])
+
+    def test_an_id_too_large_for_the_database_is_simply_missing(self):
+        huge = 10 ** 30
+        self.assertEqual(self.post("/api/history/delete", {"id": huge}).get_json(),
+                         {"removed": False})
+        r = self.post("/api/history/update", {"id": huge, "date": "2024-03-09",
+                                              "from": "ATL", "to": "LHR"})
+        self.assertEqual((r.status_code, r.get_json()),
+                         (404, {"error": "no such flight"}))
+        for action in ("accept", "decline", "cancel", "remove"):
+            self.assertEqual(self.post(f"/api/mates/{huge}/{action}").status_code,
+                             404, action)
+        self.assertEqual(self.client.get(f"/api/mates/{huge}/routes").status_code,
+                         404)
+
+
+class TestHostCheck(WebCase):
+
+    def test_a_request_addressed_to_an_unknown_host_is_refused(self):
+        evil = "http://evil.example:8817"
+        r = self.client.get("/api/history", base_url=evil)
+        self.assertEqual(r.status_code, 403)
+        r = self.client.post("/api/history", base_url=evil,
+                             headers={"Origin": evil},
+                             json={"date": "2024-03-09", "from": "ATL", "to": "LHR"})
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(self.client.get("/api/history").get_json()["flights"], [])
+
+    def test_local_names_and_the_configured_host_are_accepted(self):
+        for base in ("http://localhost:8817", "http://127.0.0.1:8817",
+                     "http://[::1]:8817"):
+            self.assertEqual(self.client.get("/api/me", base_url=base).status_code,
+                             200, base)
+        app = create_app(Config(data_dir=self.dir, live=False,
+                                base_url="https://wingmates.example"),
+                         airports=self.airports)
+        r = app.test_client().get("/api/me", base_url="https://wingmates.example")
+        self.assertEqual(r.status_code, 200)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

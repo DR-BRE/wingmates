@@ -219,6 +219,12 @@ answer as for a user who does not exist.
   rejected with 403. Comparing against the request's own host, not the
   configured base URL, keeps `localhost` and `127.0.0.1` both working
   locally. Sign-out is a `POST`.
+- Every request must be addressed to a known host: `localhost`, `127.0.0.1`,
+  `::1`, or the host of the configured base URL. Others are rejected with 403.
+  Without this, a web page whose domain is made to resolve to `127.0.0.1`
+  would pass the same-host check above and could read and change flights.
+  To reach the app by another name, such as a LAN address, set
+  `WINGMATES_BASE_URL` to it.
 
 ## Requests and mates
 

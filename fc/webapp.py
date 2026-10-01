@@ -22,6 +22,10 @@ from .users import Users, normalize_username, validate_username
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
+# The largest id SQLite can hold. Anything beyond it cannot name a row.
+MAX_ID = 2 ** 63 - 1
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
 
 class ApiError(Exception):
     def __init__(self, message: str, status: int = 400):
@@ -65,8 +69,29 @@ def create_app(config: Config, tracker=None,
     def flights():
         return history.for_user(g.user["id"])
 
+    def text(data: dict, key: str) -> str:
+        value = data.get(key)
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise ApiError(f"{key} must be text")
+        return value
+
+    def flight_args(data: dict) -> tuple:
+        return (text(data, "date"), text(data, "from"), text(data, "to"))
+
     def flight_fields(data: dict) -> dict:
-        return {k: str(data.get(k) or "") for k in OPTIONAL}
+        return {k: text(data, k) for k in OPTIONAL}
+
+    def flight_id(data: dict) -> int:
+        """The id in a request body. An id too large to exist is returned as
+        0, which matches no row, so it reads as missing rather than as an
+        error."""
+        value = data.get("id")
+        # bool is an int in Python; `true` must not be read as flight 1.
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ApiError("id is required")
+        return value if 0 < value <= MAX_ID else 0
 
     @app.errorhandler(ApiError)
     def api_error(e: ApiError):
@@ -78,8 +103,15 @@ def create_app(config: Config, tracker=None,
             return jsonify(error=e.name.lower()), e.code
         return e
 
+    # Hosts this app answers to. Without this, a web page whose domain is made
+    # to resolve to 127.0.0.1 would count as same-origin and could read and
+    # change the owner's flights.
+    allowed_hosts = LOCAL_HOSTS | {urlsplit(config.base_url).hostname}
+
     @app.before_request
     def guard():
+        if urlsplit("//" + request.host).hostname not in allowed_hosts:
+            raise ApiError("unknown host", 403)
         if request.method == "POST":
             origin = urlsplit(request.headers.get("Origin", "")).netloc
             if not origin or origin != request.host:
@@ -115,21 +147,18 @@ def create_app(config: Config, tracker=None,
     def history_add():
         data = body()
         try:
-            return jsonify(flights().add(data.get("date"), data.get("from"),
-                                         data.get("to"), **flight_fields(data)))
+            return jsonify(flights().add(*flight_args(data),
+                                         **flight_fields(data)))
         except ValueError as e:
             raise ApiError(str(e)) from None
 
     @app.post("/api/history/update")
     def history_update():
         data = body()
+        fid = flight_id(data)
         try:
-            fid = int(data.get("id"))
-        except (TypeError, ValueError):
-            raise ApiError("id is required") from None
-        try:
-            found = flights().update(fid, data.get("date"), data.get("from"),
-                                     data.get("to"), **flight_fields(data))
+            found = flights().update(fid, *flight_args(data),
+                                     **flight_fields(data))
         except ValueError as e:
             raise ApiError(str(e)) from None
         if found is None:
@@ -138,11 +167,7 @@ def create_app(config: Config, tracker=None,
 
     @app.post("/api/history/delete")
     def history_delete():
-        try:
-            fid = int(body().get("id"))
-        except (TypeError, ValueError):
-            raise ApiError("id is required") from None
-        return jsonify(removed=flights().delete(fid))
+        return jsonify(removed=flights().delete(flight_id(body())))
 
     @app.post("/api/history/import")
     def history_import():
@@ -198,23 +223,23 @@ def create_app(config: Config, tracker=None,
             raise ApiError(missing, 404)
         return jsonify(ok=True)
 
-    @app.post("/api/mates/<int:other_id>/accept")
+    @app.post("/api/mates/<int(max=9223372036854775807):other_id>/accept")
     def mate_accept(other_id: int):
         return _mate_action(mates.accept, other_id, "no such request")
 
-    @app.post("/api/mates/<int:other_id>/decline")
+    @app.post("/api/mates/<int(max=9223372036854775807):other_id>/decline")
     def mate_decline(other_id: int):
         return _mate_action(mates.decline, other_id, "no such request")
 
-    @app.post("/api/mates/<int:other_id>/cancel")
+    @app.post("/api/mates/<int(max=9223372036854775807):other_id>/cancel")
     def mate_cancel(other_id: int):
         return _mate_action(mates.cancel, other_id, "no such request")
 
-    @app.post("/api/mates/<int:other_id>/remove")
+    @app.post("/api/mates/<int(max=9223372036854775807):other_id>/remove")
     def mate_remove(other_id: int):
         return _mate_action(mates.remove, other_id, "not found")
 
-    @app.get("/api/mates/<int:other_id>/routes")
+    @app.get("/api/mates/<int(max=9223372036854775807):other_id>/routes")
     def mate_routes(other_id: int):
         routes = mates.routes(g.user["id"], other_id)
         if routes is None:
