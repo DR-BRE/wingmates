@@ -2,25 +2,22 @@
 
 // Flight history: the "My flights" tab. Shares $, api, toast and fmt with app.js.
 
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
 let historyFlights = [];
 
 // -------------------------------------------------------------------- tabs
+const TABS = ['history', 'social', 'live'].filter(t => $('tab-' + t));
+
 function showTab(name) {
-  $('pane-history').hidden = name !== 'history';
-  $('pane-live').hidden = name !== 'live';
-  $('tab-history').classList.toggle('on', name === 'history');
-  $('tab-live').classList.toggle('on', name === 'live');
+  for (const t of TABS) {
+    $('pane-' + t).hidden = t !== name;
+    $('tab-' + t).classList.toggle('on', t === name);
+  }
+  document.dispatchEvent(new CustomEvent('tab', { detail: name }));
 }
-$('tab-history').addEventListener('click', () => showTab('history'));
-$('tab-live').addEventListener('click', () => showTab('live'));
+for (const t of TABS) $('tab-' + t).addEventListener('click', () => showTab(t));
 
 // ---------------------------------------------------------------- flat map
 const RAD = Math.PI / 180;
-let routeLayer = null;
-
 // Great-circle path between two [lat, lon] points, longitudes unwrapped so the
 // line is continuous across the antimeridian.
 function greatCircle(a, b) {
@@ -50,24 +47,27 @@ function greatCircle(a, b) {
   return out;
 }
 
-function routesToMap(routes, airports) {
+const mapLayers = {};
+
+// Draw (or, with empty lists, clear) one named set of routes on the flat map.
+function mapRoutes(key, routes, airports, colour) {
   if (typeof map === 'undefined' || !map) return;
-  if (!routeLayer) routeLayer = L.layerGroup().addTo(map);
-  routeLayer.clearLayers();
+  const layer = mapLayers[key] || (mapLayers[key] = L.layerGroup().addTo(map));
+  layer.clearLayers();
   // Draw each route and airport in the neighbouring world copies too, so a
   // route that crosses the antimeridian still meets its far airport.
   for (const shift of [-360, 0, 360]) {
     for (const r of routes) {
       L.polyline(greatCircle(r.a, r.b).map(([la, lo]) => [la, lo + shift]),
-                 { color: '#5fd0dd', weight: 1.6, opacity: 0.75,
-                   interactive: false }).addTo(routeLayer);
+                 { color: colour, weight: 1.6, opacity: 0.75,
+                   interactive: false }).addTo(layer);
     }
     for (const a of airports) {
       L.circleMarker([a.lat, a.lon + shift],
                      { radius: 3.5, color: '#dff7fa', weight: 1,
-                       fillColor: '#5fd0dd', fillOpacity: 1 })
+                       fillColor: colour, fillOpacity: 1 })
         .bindTooltip(`${a.code} · ${a.name}`, { className: 'tag' })
-        .addTo(routeLayer);
+        .addTo(layer);
     }
   }
 }
@@ -96,7 +96,7 @@ function drawRoutes() {
                              name: `${a.name} · ${a.city}` });
     }
   }
-  routesToMap([...routes.values()], [...airports.values()]);
+  mapRoutes('mine', [...routes.values()], [...airports.values()], '#5fd0dd');
   if (window.Globe3D) {
     window.Globe3D.setRoutes([...routes.values()], [...airports.values()]);
   }
@@ -192,9 +192,7 @@ function renderHistory(d) {
         return;
       }
       try {
-        await api('/api/history/delete', { method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: f.id }) });
+        await post('/api/history/delete', { id: f.id });
         if (editingId === f.id) exitEdit();
         loadHistory();
       } catch (err) { toast(err.message, true); }
@@ -245,14 +243,13 @@ $('hist-form').addEventListener('submit', async e => {
   const editing = editingId !== null;
   btn.disabled = true;
   try {
-    const f = await api(editing ? '/api/history/update' : '/api/history',
-      { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingId,
-          date: val('h-date'), from: val('h-from'), to: val('h-to'),
-          airline: val('h-airline'), flight_number: val('h-flight'),
-          aircraft: val('h-aircraft'), seat: val('h-seat'), notes: val('h-notes'),
-        }) });
+// in the hist-form submit handler
+    const f = await post(editing ? '/api/history/update' : '/api/history', {
+      id: editingId,
+      date: val('h-date'), from: val('h-from'), to: val('h-to'),
+      airline: val('h-airline'), flight_number: val('h-flight'),
+      aircraft: val('h-aircraft'), seat: val('h-seat'), notes: val('h-notes'),
+    });
     if (editing) {
       exitEdit();
       hint(`Saved ${f.from.iata} → ${f.to.iata}, ${fmt(f.distance_mi, ' mi')}.`);
@@ -278,9 +275,7 @@ $('h-file').addEventListener('change', async e => {
   e.target.value = '';
   if (!file) return;
   try {
-    const r = await api('/api/history/import', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csv: await file.text() }) });
+    const r = await post('/api/history/import', { csv: await file.text() });
     const parts = [`Imported ${r.added} flight(s)`];
     if (r.skipped) parts.push(`${r.skipped} already in your log`);
     if (r.errors.length) {

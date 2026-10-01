@@ -9,6 +9,8 @@ let nearbyLayer = null;
 let lastAlertStamp = null;
 let view = 'map';                  // 'globe' once globe.js has loaded
 let lastFlights = [];
+let liveOn = false;
+const meReady = api('/api/me');
 
 // ------------------------------------------------------------- globe / map
 const globe = () => (view === 'globe' ? window.Globe3D : null);
@@ -87,6 +89,17 @@ async function api(path, opts) {
   return data;
 }
 
+// Every write goes through here: the server refuses a POST that is not JSON.
+const post = (path, body) => api(path, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body || {}),
+});
+
+// Values from the feed and from other people are never trusted as HTML.
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 // ------------------------------------------------------------ render: state
 function renderStatus(s) {
   $('pill-source').textContent = s.source || 'offline';
@@ -112,12 +125,12 @@ function renderFlights(flights) {
                    + (f.emergency ? ' emerg' : '');
     card.innerHTML = `
       <div class="top">
-        <span class="cs">${f.callsign}</span>
-        <span class="reg">${f.registration || ''} ${f.aircraft_type || ''}</span>
-        <button class="x" title="Stop tracking" data-key="${f.key}">×</button>
+        <span class="cs">${esc(f.callsign)}</span>
+        <span class="reg">${esc(f.registration || '')} ${esc(f.aircraft_type || '')}</span>
+        <button class="x" title="Stop tracking" data-key="${esc(f.key)}">×</button>
       </div>
-      <span class="phase ${f.phase}">${f.phase.replace(/_/g, ' ')}${
-        f.vertical && f.phase === 'airborne' ? ' · ' + f.vertical : ''}</span>
+      <span class="phase ${esc(f.phase)}">${esc(f.phase.replace(/_/g, ' '))}${
+        f.vertical && f.phase === 'airborne' ? ' · ' + esc(f.vertical) : ''}</span>
       <dl class="metrics">
         <div><dt>Alt</dt><dd>${fmt(f.altitude_ft)}</dd></div>
         <div><dt>Speed</dt><dd>${fmt(f.ground_speed_kt)}<span style="font-size:10px"> kt</span></dd></div>
@@ -125,9 +138,7 @@ function renderFlights(flights) {
       </dl>`;
     card.querySelector('.x').addEventListener('click', async e => {
       e.stopPropagation();
-      await api('/api/untrack', { method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: e.target.dataset.key }) });
+      await post('/api/untrack', { key: e.target.dataset.key });
       toast('Stopped tracking — moved to the flight log.');
       refresh();
     });
@@ -160,11 +171,11 @@ function renderFlights(flights) {
     layer.marker.bindTooltip(f.callsign, { permanent: true, direction: 'right',
                                            className: 'tag', offset: [10, 0] });
     layer.marker.bindPopup(
-      `<div class="pop"><b>${f.callsign}</b><br>
-       ${f.registration || '—'} · ${f.aircraft_type || '—'}<br>
-       ${f.phase.replace(/_/g, ' ')} · ${f.vertical}<br>
+      `<div class="pop"><b>${esc(f.callsign)}</b><br>
+       ${esc(f.registration || '—')} · ${esc(f.aircraft_type || '—')}<br>
+       ${esc(f.phase.replace(/_/g, ' '))} · ${esc(f.vertical)}<br>
        ${fmt(f.altitude_ft, ' ft')} · ${fmt(f.ground_speed_kt, ' kt')}<br>
-       squawk ${f.squawk || '—'} · seen ${fmt(f.stale_s, 's')} ago</div>`);
+       squawk ${esc(f.squawk || '—')} · seen ${fmt(f.stale_s, 's')} ago</div>`);
   }
 
   for (const [key, layer] of trackedLayers) {
@@ -189,9 +200,9 @@ function renderAlerts(alerts) {
     const t = new Date(a.at);
     el.innerHTML = `<span class="t">${String(t.getHours()).padStart(2, '0')}:${
       String(t.getMinutes()).padStart(2, '0')}</span>
-      <span class="b"><span class="h">${a.title}</span>
-      <span class="d">${a.detail}</span>
-      <span class="f">${a.flight}</span></span>`;
+      <span class="b"><span class="h">${esc(a.title)}</span>
+      <span class="d">${esc(a.detail)}</span>
+      <span class="f">${esc(a.flight)}</span></span>`;
     box.appendChild(el);
   }
   // Surface genuinely new loud events rather than silently updating the list.
@@ -212,8 +223,8 @@ function renderLog(log) {
   for (const l of log) {
     const el = document.createElement('div');
     el.className = 'logrow';
-    el.innerHTML = `<span class="c">${l.callsign}</span>
-      <span style="color:var(--faint)">${l.registration || '—'}</span>
+    el.innerHTML = `<span class="c">${esc(l.callsign)}</span>
+      <span style="color:var(--faint)">${esc(l.registration || '—')}</span>
       <span class="m">${fmt(l.max_altitude_ft, ' ft')} · ${fmt(l.max_speed_kt, ' kt')}</span>`;
     box.appendChild(el);
   }
@@ -221,6 +232,7 @@ function renderLog(log) {
 
 // -------------------------------------------------------------- data cycle
 async function refresh() {
+  if (!liveOn) return;
   try {
     const s = await api('/api/state');
     renderStatus(s.status);
@@ -242,9 +254,7 @@ $('add-form').addEventListener('submit', async e => {
   btn.disabled = true; btn.textContent = '…';
   hint.className = 'hint'; hint.textContent = 'Looking up on the live feed…';
   try {
-    const f = await api('/api/track', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callsign: cs }) });
+    const f = await post('/api/track', { callsign: cs });
     input.value = '';
     hint.textContent = `Tracking ${f.callsign}${f.registration ? ' · ' + f.registration : ''}.`;
     selected = f.key;
@@ -273,10 +283,10 @@ $('btn-nearby').addEventListener('click', async () => {
     for (const a of d.aircraft) {
       if (a.lat == null) continue;
       const colour = a.emergency ? '#e0574d' : (a.on_ground ? '#5d6b7b' : '#d79a45');
-      const html = `<div class="pop"><b>${a.callsign}</b><br>
-        ${a.registration || '—'} · ${a.aircraft_type || '—'}<br>
+      const html = `<div class="pop"><b>${esc(a.callsign)}</b><br>
+        ${esc(a.registration || '—')} · ${esc(a.aircraft_type || '—')}<br>
         ${fmt(a.altitude_ft, ' ft')} · ${fmt(a.ground_speed_kt, ' kt')}<br>
-        <button onclick="quickTrack('${a.callsign}')">Track this</button></div>`;
+        <button data-track="${esc(a.callsign)}">Track this</button></div>`;
       const m = L.marker([a.lat, a.lon],
                          { icon: planeIcon(a.track_deg, colour, .85) });
       m.bindPopup(html);
@@ -294,9 +304,7 @@ $('btn-nearby').addEventListener('click', async () => {
 
 window.quickTrack = async cs => {
   try {
-    const f = await api('/api/track', { method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callsign: cs }) });
+    const f = await post('/api/track', { callsign: cs });
     selected = f.key;
     toast(`Tracking ${f.callsign}`);
     map.closePopup();
@@ -304,6 +312,12 @@ window.quickTrack = async cs => {
     refresh();
   } catch (e) { toast(e.message, true); }
 };
+
+// Popups are built from HTML strings, so their Track button is wired here.
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-track]');
+  if (btn) window.quickTrack(btn.dataset.track);
+});
 
 $('btn-clear').addEventListener('click', () => {
   nearbyLayer.clearLayers();
@@ -315,7 +329,7 @@ $('btn-refresh').addEventListener('click', async () => {
   const b = $('btn-refresh');
   b.disabled = true; b.textContent = '…';
   try {
-    const r = await api('/api/poll', { method: 'POST' });
+    const r = await post('/api/poll');
     toast(`Polled the feed — ${r.updated} flight(s) updated.`);
     refresh();
   } catch (e) { toast(e.message, true); }
@@ -328,10 +342,10 @@ $('reg-form').addEventListener('submit', async e => {
   if (!reg) return;
   try {
     const a = await api('/api/aircraft?reg=' + encodeURIComponent(reg));
-    const html = `<div class="pop"><b>${a.registration}</b><br>
-       flying as ${a.callsign} · ${a.aircraft_type || '—'}<br>
+    const html = `<div class="pop"><b>${esc(a.registration)}</b><br>
+       flying as ${esc(a.callsign)} · ${esc(a.aircraft_type || '—')}<br>
        ${fmt(a.altitude_ft, ' ft')} · ${fmt(a.ground_speed_kt, ' kt')}<br>
-       <button onclick="quickTrack('${a.callsign}')">Track this</button></div>`;
+       <button data-track="${esc(a.callsign)}">Track this</button></div>`;
     focusOn(a.lat, a.lon, 8);
     if (globe()) globe().showPopup(a.lat, a.lon, html);
     else L.popup().setLatLng([a.lat, a.lon]).setContent(html).openOn(map);
@@ -348,9 +362,34 @@ function enableGlobe() {
 $('btn-globe').addEventListener('click', () => setView('globe'));
 $('btn-map').addEventListener('click', () => setView('map'));
 
+function renderWho(me) {
+  const who = $('who');
+  who.innerHTML = `<span class="me">@${esc(me.username)}</span>` + (me.dev_users
+    ? `<form id="dev-form"><input id="dev-user" placeholder="dev: switch user"
+         spellcheck="false" autocapitalize="none"></form>` : '');
+  if (!me.dev_users) return;
+  $('dev-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await post('/dev/login', { username: $('dev-user').value });
+      location.reload();
+    } catch (err) { toast(err.message, true); }
+  });
+}
+
 initMap();
 // The globe needs WebGL and a CDN; if either is missing the flat map stays.
 if (window.Globe3D) enableGlobe();
 else window.addEventListener('globe-ready', enableGlobe, { once: true });
-refresh();
-setInterval(refresh, REFRESH_MS);
+
+meReady.then(me => {
+  renderWho(me);
+  liveOn = me.live;
+  document.body.classList.toggle('no-live', !me.live);
+  if (!me.live) return;
+  refresh();
+  setInterval(refresh, REFRESH_MS);
+}).catch(() => {
+  $('pill-source').textContent = 'server unreachable';
+  $('pill-source').className = 'pill bad';
+});

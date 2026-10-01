@@ -17,6 +17,12 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
 .brand .glyph{color:var(--accent);margin-right:6px}
 .brand .dim{color:var(--faint);margin-left:2px}
 .status{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.who{display:flex;gap:10px;align-items:center;font-family:var(--mono);font-size:12px;
+  color:var(--muted)}
+body.no-live .who{margin-left:auto}
+.who input{width:150px;font-size:11px;padding:5px 8px}
+body.no-live .live-only{display:none}
+.link + .link{margin-left:12px}
 .pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;
   padding:4px 9px;border-radius:3px;background:var(--accent-dim);color:var(--accent);
   border:1px solid #17414a;white-space:nowrap}

@@ -10,18 +10,19 @@
 <body>
 <header class="bar">
   <div class="brand"><span class="glyph">✈</span> WING<span class="dim">MATES</span></div>
-  <div class="status" id="status">
+  <div class="status live-only" id="status">
     <span class="pill" id="pill-source">connecting…</span>
     <span class="pill quiet" id="pill-tracked">0 tracked</span>
     <span class="pill quiet" id="pill-poll">—</span>
   </div>
+  <div class="who" id="who"></div>
 </header>
 
 <main>
   <aside class="side">
     <div class="tabs" role="tablist">
       <button role="tab" id="tab-history" class="on">My flights</button>
-      <button role="tab" id="tab-live">Live</button>
+      <button role="tab" id="tab-live" class="live-only">Live</button>
     </div>
 
     <div id="pane-history">
@@ -51,6 +52,7 @@
           <button type="submit" id="h-add">Add flight</button>
           <button type="button" id="h-cancel" hidden>Cancel</button>
           <button type="button" id="h-import">Import CSV</button>
+          <a class="link" href="/api/history/export.csv" download>Export</a>
           <a class="link" href="/api/history/template.csv" download>Template</a>
         </div>
         <input type="file" id="h-file" accept=".csv,text/csv" hidden>
@@ -109,10 +111,10 @@
         <button id="btn-globe" title="3D globe">Globe</button>
         <button id="btn-map" title="Flat map, better for close-up">Map</button>
       </div>
-      <button id="btn-nearby" title="Show aircraft around the map centre">Nearby</button>
-      <button id="btn-clear" title="Hide nearby aircraft">Clear</button>
-      <button id="btn-refresh" title="Poll the feed now">Poll now</button>
-      <form id="reg-form" class="reg">
+      <button id="btn-nearby" class="live-only" title="Show aircraft around the map centre">Nearby</button>
+      <button id="btn-clear" class="live-only" title="Hide nearby aircraft">Clear</button>
+      <button id="btn-refresh" class="live-only" title="Poll the feed now">Poll now</button>
+      <form id="reg-form" class="reg live-only">
         <input id="reg" placeholder="Where's N123AB?" spellcheck="false">
         <button type="submit">Find</button>
       </form>
