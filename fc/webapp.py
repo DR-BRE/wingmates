@@ -69,7 +69,7 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
     def current_user() -> dict | None:
         uid = session.get("uid")
         if google:
-            return users.get(uid) if uid else None
+            return users.for_session(uid, session.get("epoch")) if uid else None
         if config.dev_users and uid:
             user = users.get(uid)
             if user:
@@ -335,11 +335,15 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
             # Start a clean session: nothing from before sign-in carries over.
             session.clear()
             session["uid"] = user["id"]
+            session["epoch"] = users.session_epoch(user["id"])
             session.permanent = True
             return redirect(target)
 
         @app.post("/auth/logout")
         def auth_logout():
+            # Ends every session of the account, not only this browser's.
+            if g.user is not None:
+                users.end_sessions(g.user["id"])
             session.clear()
             return jsonify(ok=True)
 

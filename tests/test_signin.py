@@ -202,6 +202,38 @@ class TestSessions(SignInCase):
                                          base_url="http://127.0.0.1").status_code, 401)
 
 
+    def test_signing_out_ends_every_session_of_the_account(self):
+        phone, _ = self.sign_in(username="brett")
+        laptop, _ = self.sign_in()
+        copied = self.app.test_client()
+        copied.set_cookie("session", phone.get_cookie("session").value)
+        ann, _ = self.sign_in(ANN, username="ann")
+        for client in (phone, laptop, copied):
+            self.assertEqual(client.get("/api/me").status_code, 200)
+
+        self.post("/auth/logout", client=phone)
+        for client in (phone, laptop, copied):
+            self.assertEqual(client.get("/api/me").status_code, 401)
+        self.assertEqual(ann.get("/api/me").get_json()["username"], "ann")
+
+        again, _ = self.sign_in()
+        self.assertEqual(again.get("/api/me").get_json()["username"], "brett")
+        self.assertEqual(copied.get("/api/me").status_code, 401)
+
+    def test_a_cookie_from_before_session_epochs_is_asked_to_sign_in(self):
+        client, _ = self.sign_in(username="brett")
+        uid = client.get("/api/me").get_json()["id"]
+        old = self.app.test_client()
+        with old.session_transaction() as s:
+            s["uid"] = uid                      # no epoch, as issued before
+        r = old.get("/api/me")
+        self.assertEqual((r.status_code, r.get_json()),
+                         (401, {"error": "sign in required"}))
+        self.assertEqual(old.get("/").headers["Location"], "/login")
+
+    def test_signing_out_while_signed_out_is_harmless(self):
+        self.assertEqual(self.post("/auth/logout").get_json(), {"ok": True})
+
 class TestAccountDelete(SignInCase):
 
     def test_it_needs_the_word_delete(self):

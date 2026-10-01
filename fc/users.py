@@ -97,6 +97,28 @@ class Users:
             return self._public(db.execute(
                 "SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
 
+    def session_epoch(self, user_id: int) -> int | None:
+        with closing(connect(self.path)) as db:
+            row = db.execute("SELECT session_epoch FROM users WHERE id = ?",
+                             (user_id,)).fetchone()
+        return row["session_epoch"] if row else None
+
+    def for_session(self, user_id: int, epoch) -> dict | None:
+        """The user a session cookie names, if that cookie is still good.
+        Signing out raises the account's epoch, which retires every cookie
+        issued before it, including copies."""
+        if isinstance(epoch, bool) or not isinstance(epoch, int):
+            return None
+        with closing(connect(self.path)) as db:
+            return self._public(db.execute(
+                "SELECT * FROM users WHERE id = ? AND session_epoch = ?",
+                (user_id, epoch)).fetchone())
+
+    def end_sessions(self, user_id: int) -> None:
+        with closing(connect(self.path)) as db, db:
+            db.execute("UPDATE users SET session_epoch = session_epoch + 1"
+                       " WHERE id = ?", (user_id,))
+
     def by_username(self, raw: str) -> dict | None:
         name = normalize_username(raw)
         if not name:

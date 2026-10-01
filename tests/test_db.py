@@ -116,5 +116,59 @@ class TestMigration(DbCase):
         self.assertEqual(self.backup.read_bytes(), before)
 
 
+# The users table exactly as schema version 1 created it.
+V1_USERS = """
+CREATE TABLE users (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    google_sub  TEXT UNIQUE,
+    username    TEXT UNIQUE,
+    email       TEXT,
+    name        TEXT NOT NULL,
+    picture_url TEXT,
+    created_at  TEXT NOT NULL
+)"""
+
+
+class TestUpgradeFromV1(DbCase):
+
+    def v1(self):
+        with closing(sqlite3.connect(self.path)) as raw, raw:
+            for ddl in (V1_USERS, db._FLIGHTS, db._REQUESTS, db._MATES):
+                raw.execute(ddl)
+            raw.execute("INSERT INTO users (google_sub, username, name, created_at)"
+                        " VALUES ('g-1', 'brett', 'Brett', 't')")
+            raw.execute("INSERT INTO flights (user_id, date, origin, dest,"
+                        " distance_km, created_at) VALUES (1, '2026-09-17',"
+                        " 'SEA', 'KEF', 5811.0, 't')")
+            raw.execute("PRAGMA user_version = 1")
+
+    def test_accounts_and_flights_are_kept_and_the_epoch_starts_at_zero(self):
+        self.v1()
+        db.init(self.path)
+        with closing(db.connect(self.path)) as c:
+            user = c.execute("SELECT * FROM users").fetchone()
+            self.assertEqual((user["username"], user["session_epoch"]),
+                             ("brett", 0))
+            self.assertEqual(
+                c.execute("SELECT COUNT(*) FROM flights").fetchone()[0], 1)
+            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 2)
+
+    def test_upgrading_twice_changes_nothing(self):
+        self.v1()
+        db.init(self.path)
+        db.init(self.path)
+        with closing(db.connect(self.path)) as c:
+            cols = [r["name"] for r in c.execute("PRAGMA table_info(users)")]
+        self.assertEqual(cols.count("session_epoch"), 1)
+
+    def test_a_fresh_database_has_the_column(self):
+        db.init(self.path)
+        with closing(db.connect(self.path)) as c, c:
+            uid = db.ensure_local_user(c)
+            self.assertEqual(c.execute(
+                "SELECT session_epoch FROM users WHERE id = ?",
+                (uid,)).fetchone()[0], 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

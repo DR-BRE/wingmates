@@ -9,7 +9,7 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 LOCAL_USERNAME = "you"
 
 # AUTOINCREMENT so an id is never handed out twice: a session cookie left over
@@ -22,6 +22,7 @@ CREATE TABLE users (
     email       TEXT,
     name        TEXT NOT NULL,
     picture_url TEXT,
+    session_epoch INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL
 )"""
 
@@ -88,13 +89,17 @@ def _version(db: sqlite3.Connection) -> int:
 
 
 def init(path: Path) -> None:
-    """Create the schema, or migrate a single-user database to it. A database
-    already at the current version is left untouched."""
+    """Create the schema, or bring an older database up to it. A database
+    already at the current version is left untouched.
+
+    Version 0 is either empty or the single-user format (a bare flights
+    table). Version 1 lacks users.session_epoch."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with closing(connect(path)) as db:
-        if _version(db) >= SCHEMA_VERSION:
+        version = _version(db)
+        if version >= SCHEMA_VERSION:
             return
-        legacy = db.execute(
+        legacy = version == 0 and db.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table'"
             " AND name = 'flights'").fetchone() is not None
 
@@ -107,24 +112,31 @@ def init(path: Path) -> None:
     with closing(connect(path)) as db:
         db.execute("BEGIN IMMEDIATE")
         try:
-            if _version(db) >= SCHEMA_VERSION:   # another process got here first
-                db.rollback()
-                return
-            for ddl in (_USERS, _REQUESTS, _MATES):
-                db.execute(ddl)
-            if legacy:
-                owner = ensure_local_user(db)
-                db.execute("ALTER TABLE flights RENAME TO flights_legacy")
-                db.execute(_FLIGHTS)
-                db.execute(
-                    f"INSERT INTO flights ({_LEGACY_COLUMNS}, user_id)"
-                    f" SELECT {_LEGACY_COLUMNS}, ? FROM flights_legacy", (owner,))
-                db.execute("DROP TABLE flights_legacy")
-            else:
-                db.execute(_FLIGHTS)
-            db.execute("CREATE INDEX flights_user_date ON flights (user_id, date)")
-            db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            version = _version(db)      # another process may have got here first
+            if version == 0:
+                _create(db, legacy)
+            elif version == 1:
+                db.execute("ALTER TABLE users ADD COLUMN"
+                           " session_epoch INTEGER NOT NULL DEFAULT 0")
+            if version < SCHEMA_VERSION:
+                db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             db.commit()
         except BaseException:
             db.rollback()
             raise
+
+
+def _create(db: sqlite3.Connection, legacy: bool) -> None:
+    for ddl in (_USERS, _REQUESTS, _MATES):
+        db.execute(ddl)
+    if legacy:
+        owner = ensure_local_user(db)
+        db.execute("ALTER TABLE flights RENAME TO flights_legacy")
+        db.execute(_FLIGHTS)
+        db.execute(
+            f"INSERT INTO flights ({_LEGACY_COLUMNS}, user_id)"
+            f" SELECT {_LEGACY_COLUMNS}, ? FROM flights_legacy", (owner,))
+        db.execute("DROP TABLE flights_legacy")
+    else:
+        db.execute(_FLIGHTS)
+    db.execute("CREATE INDEX flights_user_date ON flights (user_id, date)")

@@ -146,5 +146,34 @@ class TestSetUsername(UsersCase):
             self.users.set_username(999, "brett")
 
 
+class TestSessionEpoch(UsersCase):
+
+    def setUp(self):
+        super().setUp()
+        self.uid = self.users.create("Ann", "ann")["id"]
+
+    def test_a_session_is_valid_only_under_the_current_epoch(self):
+        self.assertEqual(self.users.session_epoch(self.uid), 0)
+        self.assertEqual(self.users.for_session(self.uid, 0)["username"], "ann")
+        self.users.end_sessions(self.uid)
+        self.assertEqual(self.users.session_epoch(self.uid), 1)
+        self.assertIsNone(self.users.for_session(self.uid, 0))
+        self.assertEqual(self.users.for_session(self.uid, 1)["id"], self.uid)
+
+    def test_a_missing_or_malformed_epoch_never_matches(self):
+        for bad in (None, "0", 0.5, [0]):
+            self.assertIsNone(self.users.for_session(self.uid, bad), repr(bad))
+        self.assertIsNone(self.users.for_session(999, 0))
+        self.assertIsNone(self.users.session_epoch(999))
+
+    def test_the_epoch_is_not_part_of_the_public_user(self):
+        self.assertNotIn("session_epoch", self.users.for_session(self.uid, 0))
+
+    def test_ending_one_persons_sessions_leaves_others_alone(self):
+        bob = self.users.create("Bob", "bob")["id"]
+        self.users.end_sessions(self.uid)
+        self.assertEqual(self.users.session_epoch(bob), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
