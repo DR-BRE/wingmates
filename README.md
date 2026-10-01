@@ -1,47 +1,101 @@
-# Flighty Clone — live flight tracker
+# Flighty Clone — your flight history on a globe, plus a live tracker
 
-A working flight tracker: real ADS-B data, live map, a state machine that
-derives departure/landing/descent from aircraft positions, and an alert feed.
-Python stdlib only — **no pip install, no API key, no account.**
+Two things in one app, sharing one map:
+
+- **My flights** — log the flights you've taken (by hand or CSV) and see them
+  as arcs on a 3D globe, with totals for flights, miles, airports and countries.
+- **Live** — track a real aircraft right now from ADS-B data, with a state
+  machine that derives departure/landing/descent and an alert feed.
+
+Python stdlib only on the server — **no pip install, no API key, no account.**
+The browser loads its map libraries and textures from public CDNs, so it needs
+an internet connection.
 
 ```
 cd ~/flighty-clone
 python3 run.py
 ```
 
-Opens `http://127.0.0.1:8817`. Press `ctrl-c` to stop.
+Opens `http://127.0.0.1:8817`. Press `ctrl-c` to stop. Needs Python 3.11+.
 
 ```
 python3 run.py --port 9000     # different port
 python3 run.py --no-browser    # don't auto-open
-python3 -m unittest discover -s tests -t .   # 20 offline tests
+python3 -m unittest discover -s tests -t .   # 40 offline tests
 ```
 
-## What it does
+## My flights
+
+Everything here is stored locally in `~/.flighty-clone/flights.db` (SQLite).
+
+| | |
+|---|---|
+| **Add a flight** | From, To and a date are all that's required. Codes can be IATA (`ATL`) or ICAO (`KATL`); typing a city name suggests airports. Airline, flight number, aircraft, seat and notes are optional. After each add, *From* is pre-filled with where you just landed, so connecting legs go quickly. |
+| **Import CSV** | Download the template from the app, fill it in, import it. Bad rows are reported by line number while the good ones still go in. Importing the same file twice adds nothing. |
+| **Edit / delete** | ✎ loads a flight back into the form and saving recomputes the distance. Delete takes two clicks so a stray tap can't lose a flight. |
+| **Totals** | Flights, great-circle miles, distinct airports, distinct countries. |
+| **Routes** | One arc per airport pair on both the globe and the flat map. Click a flight in the list to frame it. |
+
+### CSV format
+
+```
+date,from,to,airline,flight_number,aircraft,seat,notes
+2024-03-09,ATL,LHR,Delta,DL30,A333,34A,window
+```
+
+`date`, `from` and `to` are required; dates are `YYYY-MM-DD`. Common header
+spellings also work (`Origin`, `Destination`, `Carrier`, `Flight No`, …), and a
+byte-order mark from Excel is handled. Two rows with the same date, route and
+flight number count as the same flight; the same route and day with *different*
+flight numbers are kept as two flights.
+
+## The globe
+
+A sphere displaced by real elevation data, shaded dark: near-black oceans, slate
+terrain lit by relief, teal coastline glow, amber city lights, an atmosphere
+halo and stars. Terrain height is exaggerated for the sculpted look. Drag to
+rotate, scroll or pinch to zoom, and use the **Globe / Map** toggle for the
+flat map. If WebGL or the CDN is unavailable, the app stays on the flat map.
+
+It is built from free textures (NASA-derived, shipped with the MIT-licensed
+[three-globe](https://github.com/vasturiano/three-globe) package) rather than a
+purchased 3D model, so there is no model licence to manage. Close-up detail is
+limited by the 2048-px elevation map.
+
+## Live tracking
 
 | | |
 |---|---|
 | **Track a flight** | By ADS-B callsign (`DAL983`, `BAW117`). Resolves against the live feed immediately — no spinner, no fake "pending" state. |
-| **Live map** | Dark map, aircraft rotated to true track, position trails accumulating as it flies. |
+| **Live map** | Aircraft rotated to true track, with position trails that accumulate as it flies. |
 | **Phase detection** | At gate → pushback → taxi → airborne (climb/cruise/descent) → landed → taxi in → at gate. Derived entirely from position reports. |
 | **Alerts** | Departed, Landed, Descent started, Reached cruise, Pushed back, At the gate, altitude milestones. Loud events toast on screen. |
 | **Emergency squawks** | 7500/7600/7700 detected and escalated on the *first* sample, no hysteresis delay. |
 | **Where's my plane** | Look up an airframe by registration (`G-RUKB`) and see what it's flying as right now. |
-| **Nearby radar** | Every aircraft within 90 nm of the map centre, one click to track any of them. |
-| **Flight log** | Completed flights with max altitude, max speed, duration. |
-| **Survives restart** | State persists to `~/.flighty-clone/state.json`, written atomically. |
+| **Nearby radar** | Every aircraft within about 90 nm of the view centre (wider when zoomed out on the globe, capped at 250 nm), one click to track any of them. |
+| **Flight log** | Completed live-tracked flights with max altitude, max speed, duration. |
+| **Survives restart** | Tracked flights and the alert feed persist to `~/.flighty-clone/state.json`, written atomically. |
+
+Live-tracked flights and **My flights** are separate: tracking a flight does not
+add it to your history.
 
 ## Data sources
 
 | | Role | Gives |
 |---|---|---|
-| [adsb.lol](https://adsb.lol) | primary | callsign, registration, type, altitude, speed, vertical rate, track, squawk |
-| [OpenSky](https://opensky-network.org) | fallback | position, altitude, speed, track (no registration or type) |
+| [adsb.lol](https://adsb.lol) | live, primary | callsign, registration, type, altitude, speed, vertical rate, track, squawk |
+| [OpenSky](https://opensky-network.org) | live, fallback | position, altitude, speed, track (no registration or type) |
+| [OurAirports](https://ourairports.com/data/) | history | ~8,800 airports with an IATA code, in `data/airports.csv` (public domain) |
+| [Esri](https://www.arcgis.com) dark gray tiles | flat map | basemap and labels |
 
-Failover is automatic and was **exercised for real during development**: adsb.lol
-returned HTTP 429, the tracker switched to OpenSky mid-session, and tracked
-flights kept updating. The status pill in the header always shows which feed is
-live. A 429 now triggers a 5-minute cooldown, because a free community feed
+The flat map uses Esri because CARTO's free dark tiles now require an API key.
+Esri's free tile terms suit a personal tool; check them again before opening
+the app to many users.
+
+Live failover is automatic and was **exercised for real during development**:
+adsb.lol returned HTTP 429, the tracker switched to OpenSky mid-session, and
+tracked flights kept updating. The status pill in the header always shows which
+feed is live. A 429 triggers a 5-minute cooldown, because a free community feed
 saying "slow down" deserves to be listened to.
 
 Polling is deliberately gentle: one sweep every 20 s, 2 s between per-flight
@@ -54,7 +108,8 @@ requires a paid feed**, and no amount of code substitutes for it:
 
 - **Gates, terminals, baggage claim** — airline/GDS feeds, not ADS-B.
 - **Scheduled times**, and therefore **delays**. Without a schedule there is no
-  "late" — only "where the aircraft is". This is the single biggest gap.
+  "late" — only "where the aircraft is". History entries are a date and two
+  airports, with no departure or arrival times.
 - **Cancellations** — a cancelled flight simply never appears on ADS-B, which is
   indistinguishable from an aircraft out of receiver coverage.
 - **Codeshares** — ADS-B carries the operating callsign only, so a passenger
@@ -63,11 +118,19 @@ requires a paid feed**, and no amount of code substitutes for it:
   Apple Developer account and APNs.
 - **Coverage gaps** — oceanic, polar, and much of Africa/Asia have thin or no
   community receiver coverage. Aircraft genuinely vanish there.
+- **Airports without an IATA code** — small fields and heliports can't be
+  entered in the history.
 
 Flighty solves these with FlightAware Firehose plus schedule feeds, which is
 enterprise-contract territory. The architecture here keeps that swap cheap: all
 vendor field names stop inside `fc/adsb.py`, so adding a schedule provider means
 a new client module and a wider `Position`, not a rewrite.
+
+## Not built yet
+
+It is a single-user, local app today. Not yet built: accounts and hosting,
+sharing flights with friends, and importing from calendar events or email
+confirmations.
 
 ## Layout
 
@@ -77,20 +140,35 @@ fc/schema.py            FlightKey, Position, Phase, Event, FlightState
 fc/adsb.py              feed clients + automatic failover
 fc/statemachine.py      phase detection with hysteresis
 fc/tracker.py           poll loop, registry, alert feed, persistence
+fc/airports.py          airport lookup by code, city or name
+fc/history.py           flight history: SQLite store, CSV import, stats
 fc/server.py            stdlib HTTP API + static serving
-web/                    UI (Leaflet map, vanilla JS, no build step)
-tests/                  20 offline tests — no network required
+data/airports.csv       airport table (OurAirports, public domain)
+web/index.html          page: My flights / Live tabs, map and globe
+web/app.js              live tracker UI and the flat map (Leaflet)
+web/history.js          My flights UI: form, list, edit, route drawing
+web/globe.js            3D globe (three.js), loaded as an ES module
+tests/                  40 offline tests — no network required
 ```
 
 ## API
 
 ```
-GET  /api/state                      everything: flights, alerts, log, status
-POST /api/track      {callsign}      start tracking
-POST /api/untrack    {key}           stop, and archive to the log
-POST /api/poll                       force a feed poll now
-GET  /api/nearby?lat=&lon=&dist=     aircraft in an area
-GET  /api/aircraft?reg=              where is this airframe right now
+GET  /api/state                      live: flights, alerts, log, status
+POST /api/track      {callsign}      live: start tracking
+POST /api/untrack    {key}           live: stop, and archive to the log
+POST /api/poll                       live: force a feed poll now
+GET  /api/nearby?lat=&lon=&dist=     live: aircraft in an area
+GET  /api/aircraft?reg=              live: where is this airframe right now
+
+GET  /api/history                    flights (newest first) and totals
+POST /api/history    {date, from, to, airline?, flight_number?,
+                      aircraft?, seat?, notes?}        add a flight
+POST /api/history/update  {id, ...same fields}         replace a flight
+POST /api/history/delete  {id}                         delete a flight
+POST /api/history/import  {csv}                        import CSV text
+GET  /api/history/template.csv       the import template
+GET  /api/airports?q=                airport suggestions
 ```
 
 ## Why hysteresis is the load-bearing detail
