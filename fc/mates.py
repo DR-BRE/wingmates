@@ -70,7 +70,7 @@ class Mates:
     def __init__(self, users: Users, history: History):
         self.users = users
         self.history = history
-        self.path = history.path
+        self.database = history.database
 
     # ----------------------------------------------------------------- lookup
     def card(self, viewer_id: int, username: str) -> dict | None:
@@ -78,7 +78,7 @@ class Mates:
         person = self.users.by_username(username)
         if person is None:
             return None
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             relation = _relation(db, viewer_id, person["id"])
         return {**{k: person[k] for k in PERSON_FIELDS}, "relation": relation}
 
@@ -90,7 +90,7 @@ class Mates:
         to_id = target["id"]
         if to_id == from_id:
             raise ValueError("that is your own username")
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             if _are_mates(db, from_id, to_id):
                 raise ValueError("you are already mates")
             mine, theirs = _status(db, from_id, to_id), _status(db, to_id, from_id)
@@ -129,21 +129,21 @@ class Mates:
         return {**{k: target[k] for k in PERSON_FIELDS}, "relation": relation}
 
     def accept(self, user_id: int, other_id: int) -> bool:
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             if _status(db, other_id, user_id) != "pending":
                 return False
             _join(db, user_id, other_id)
             return True
 
     def decline(self, user_id: int, other_id: int) -> bool:
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             return db.execute(
                 "UPDATE mate_requests SET status = 'declined'"
                 " WHERE from_id = ? AND to_id = ? AND status = 'pending'",
                 (other_id, user_id)).rowcount > 0
 
     def cancel(self, user_id: int, other_id: int) -> bool:
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             status = _status(db, user_id, other_id)
             if status == "pending":
                 db.execute(
@@ -159,7 +159,7 @@ class Mates:
 
     def remove(self, user_id: int, other_id: int) -> bool:
         lo, hi = sorted((user_id, other_id))
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             return db.execute(
                 "DELETE FROM mates WHERE user_lo = ? AND user_hi = ?",
                 (lo, hi)).rowcount > 0
@@ -174,7 +174,7 @@ class Mates:
         return out
 
     def social(self, user_id: int) -> dict:
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             mate_ids = [r[0] for r in db.execute(
                 "SELECT user_hi FROM mates WHERE user_lo = ?"
                 " UNION SELECT user_lo FROM mates WHERE user_hi = ?",
@@ -197,7 +197,7 @@ class Mates:
         """A mate's distinct routes, or None if the two are not mates. Each
         airport pair appears once, alphabetically, so neither the direction
         nor the number of times it was flown is revealed."""
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             if not _are_mates(db, viewer_id, mate_id):
                 return None
         pairs: dict[tuple[str, str], dict] = {}

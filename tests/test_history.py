@@ -1,6 +1,5 @@
 """Flight-history tests. Offline: a temp database and a four-airport fixture."""
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fc.airports import Airports
 from fc.history import History, great_circle_km, template_csv
 from fc.users import Users
+from tests.helpers import database, temp_dir
 
 AIRPORTS_CSV = """iata,icao,name,city,country,lat,lon,size
 ATL,KATL,Hartsfield Jackson Atlanta International Airport,Atlanta,US,33.6367,-84.4281,3
@@ -20,13 +20,12 @@ LGW,EGKK,London Gatwick Airport,London,GB,51.1481,-0.1903,2
 
 class HistoryCase(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        d = Path(self.tmp.name)
+        d = temp_dir(self)
         (d / "airports.csv").write_text(AIRPORTS_CSV)
         self.airports = Airports(d / "airports.csv")
-        self.store = History(self.airports, d / "flights.db")
-        self.users = Users(d / "flights.db")
+        self.database = database(self, d)
+        self.store = History(self.airports, self.database)
+        self.users = Users(self.database)
         self.uid = self.users.create("Ann", "ann")["id"]
         self.h = self.store.for_user(self.uid)
 
@@ -76,7 +75,7 @@ class TestAdd(HistoryCase):
 
     def test_survives_reopening_the_database(self):
         self.h.add("2024-03-09", "ATL", "LHR")
-        again = History(self.airports, self.h.path).for_user(self.uid)
+        again = History(self.airports, self.h.database).for_user(self.uid)
         self.assertEqual(len(again.list()), 1)
 
 

@@ -49,10 +49,10 @@ class History:
     """The flight store. Flights are reached only through for_user(), so no
     query can forget whose flights it is touching."""
 
-    def __init__(self, airports: Airports | None = None, path: Path = DB_FILE):
+    def __init__(self, airports: Airports | None = None, database=DB_FILE):
         self.airports = airports or Airports()
-        self.path = path
-        init(path)
+        self.database = database
+        init(database)
 
     def for_user(self, user_id: int) -> "UserHistory":
         return UserHistory(self, user_id)
@@ -63,7 +63,7 @@ class UserHistory:
 
     def __init__(self, history: History, user_id: int):
         self.airports = history.airports
-        self.path = history.path
+        self.database = history.database
         self.user_id = user_id
 
     # ----------------------------------------------------------------- writes
@@ -94,7 +94,7 @@ class UserHistory:
 
     def add(self, day: str, origin: str, dest: str, **extra) -> dict:
         d, o, t = self._validate(day, origin, dest)
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             fid = self._insert(db, d, o, t, extra)
         return self.get(fid)
 
@@ -104,7 +104,7 @@ class UserHistory:
         Returns None if this user has no such flight."""
         d, o, t = self._validate(day, origin, dest)
         km = great_circle_km(o.lat, o.lon, t.lat, t.lon)
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             changed = db.execute(
                 "UPDATE flights SET date=?, origin=?, dest=?, airline=?,"
                 " flight_number=?, aircraft=?, seat=?, notes=?, distance_km=?"
@@ -115,7 +115,7 @@ class UserHistory:
         return self.get(flight_id) if changed else None
 
     def delete(self, flight_id: int) -> bool:
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             return db.execute(
                 "DELETE FROM flights WHERE id = ? AND user_id = ?",
                 (flight_id, self.user_id)).rowcount > 0
@@ -139,7 +139,7 @@ class UserHistory:
 
         added = skipped = 0
         errors: list[dict] = []
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             seen = {(r["date"], r["origin"], r["dest"], r["flight_number"].upper())
                     for r in db.execute(
                         "SELECT * FROM flights WHERE user_id = ?",
@@ -177,14 +177,14 @@ class UserHistory:
         }
 
     def get(self, flight_id: int) -> dict | None:
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             r = db.execute(
                 "SELECT * FROM flights WHERE id = ? AND user_id = ?",
                 (flight_id, self.user_id)).fetchone()
         return self._row(r) if r else None
 
     def list(self) -> list[dict]:
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             rows = db.execute(
                 "SELECT * FROM flights WHERE user_id = ?"
                 " ORDER BY date DESC, id DESC", (self.user_id,)).fetchall()
@@ -218,7 +218,7 @@ class UserHistory:
         out = io.StringIO()
         w = csv.writer(out, lineterminator="\n")
         w.writerow(TEMPLATE_COLUMNS)
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             for r in db.execute(
                     "SELECT * FROM flights WHERE user_id = ? ORDER BY date, id",
                     (self.user_id,)):

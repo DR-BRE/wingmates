@@ -33,9 +33,9 @@ def validate_username(raw) -> str:
 
 
 class Users:
-    def __init__(self, path: Path):
-        self.path = path
-        init(path)
+    def __init__(self, database):
+        self.database = database
+        init(database)
 
     @staticmethod
     def _public(row: sqlite3.Row | None) -> dict | None:
@@ -46,7 +46,7 @@ class Users:
         username = validate_username(username)
         name = str(name or "").strip() or username
         try:
-            with closing(connect(self.path)) as db, db:
+            with closing(connect(self.database)) as db, db:
                 uid = db.execute(
                     "INSERT INTO users (google_sub, username, email, name,"
                     " picture_url, created_at) VALUES (?,?,?,?,?,?)",
@@ -62,7 +62,7 @@ class Users:
         refreshed on every later one. Keyed on `sub`, which never changes, so
         a new email address does not make a second account."""
         name = (name or "").strip() or (email or "").split("@")[0] or "Wingmate"
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             # One statement, so two first sign-ins at once cannot both insert.
             db.execute(
                 "INSERT INTO users (google_sub, email, name, picture_url,"
@@ -79,7 +79,7 @@ class Users:
         that has none, so a second attempt changes nothing."""
         username = validate_username(raw)
         try:
-            with closing(connect(self.path)) as db, db:
+            with closing(connect(self.database)) as db, db:
                 changed = db.execute(
                     "UPDATE users SET username = ? WHERE id = ?"
                     " AND username IS NULL", (username, user_id)).rowcount
@@ -90,12 +90,12 @@ class Users:
         return self.get(user_id)
 
     def get(self, user_id: int) -> dict | None:
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             return self._public(db.execute(
                 "SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
 
     def session_epoch(self, user_id: int) -> int | None:
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             row = db.execute("SELECT session_epoch FROM users WHERE id = ?",
                              (user_id,)).fetchone()
         return row["session_epoch"] if row else None
@@ -106,13 +106,13 @@ class Users:
         issued before it, including copies."""
         if isinstance(epoch, bool) or not isinstance(epoch, int):
             return None
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             return self._public(db.execute(
                 "SELECT * FROM users WHERE id = ? AND session_epoch = ?",
                 (user_id, epoch)).fetchone())
 
     def end_sessions(self, user_id: int) -> None:
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             db.execute("UPDATE users SET session_epoch = session_epoch + 1"
                        " WHERE id = ?", (user_id,))
 
@@ -120,18 +120,25 @@ class Users:
         name = normalize_username(raw)
         if not name:
             return None
-        with closing(connect(self.path)) as db:
+        with closing(connect(self.database)) as db:
             return self._public(db.execute(
                 "SELECT * FROM users WHERE username = ?", (name,)).fetchone())
 
     def ensure_local(self) -> dict:
-        with closing(connect(self.path)) as db, db:
+        with closing(connect(self.database)) as db, db:
             uid = ensure_local_user(db)
         return self.get(uid)
 
     def delete(self, user_id: int) -> bool:
-        """Remove the user. Their flights, requests and mate pairs go with
-        them through the schema's ON DELETE CASCADE."""
-        with closing(connect(self.path)) as db, db:
+        """Remove the user and everything that is theirs. Spelled out rather
+        than left to ON DELETE CASCADE, which a hosted database may not
+        enforce: an account deletion that left the flights behind would be a
+        privacy failure nobody would see."""
+        with closing(connect(self.database)) as db, db:
+            db.execute("DELETE FROM flights WHERE user_id = ?", (user_id,))
+            db.execute("DELETE FROM mate_requests WHERE from_id = ? OR to_id = ?",
+                       (user_id, user_id))
+            db.execute("DELETE FROM mates WHERE user_lo = ? OR user_hi = ?",
+                       (user_id, user_id))
             return db.execute("DELETE FROM users WHERE id = ?",
                               (user_id,)).rowcount > 0

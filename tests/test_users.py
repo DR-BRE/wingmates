@@ -1,13 +1,13 @@
 """User store tests. Offline: a temp database."""
 import sys
 import threading
-import tempfile
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fc.users import Users, normalize_username, validate_username
+from tests.helpers import database, temp_dir
 
 
 class TestUsernameRules(unittest.TestCase):
@@ -35,9 +35,7 @@ class TestUsernameRules(unittest.TestCase):
 
 class UsersCase(unittest.TestCase):
     def setUp(self):
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.users = Users(Path(tmp.name) / "flights.db")
+        self.users = Users(database(self, temp_dir(self)))
 
 
 class TestUsers(UsersCase):
@@ -71,6 +69,29 @@ class TestUsers(UsersCase):
         self.assertFalse(self.users.delete(u["id"]))
         self.assertIsNone(self.users.get(u["id"]))
         self.assertNotEqual(self.users.create("New Ann", "ann")["id"], u["id"])
+
+
+    def test_deleting_a_user_removes_their_rows_without_database_cascades(self):
+        from contextlib import closing
+        from fc.db import connect
+        ann = self.users.create("Ann", "ann")["id"]
+        bob = self.users.create("Bob", "bob")["id"]
+        with closing(connect(self.users.database)) as db, db:
+            db.execute("INSERT INTO flights (user_id, date, origin, dest,"
+                       " distance_km, created_at) VALUES (?,?,?,?,?,?)",
+                       (ann, "2024-03-09", "ATL", "LHR", 6760.0, "t"))
+            db.execute("INSERT INTO flights (user_id, date, origin, dest,"
+                       " distance_km, created_at) VALUES (?,?,?,?,?,?)",
+                       (bob, "2024-03-09", "ATL", "JFK", 1200.0, "t"))
+            db.execute("INSERT INTO mate_requests (from_id, to_id, status,"
+                       " created_at) VALUES (?, ?, 'pending', 't')", (bob, ann))
+            db.execute("INSERT INTO mates (user_lo, user_hi, created_at)"
+                       " VALUES (?, ?, 't')", (min(ann, bob), max(ann, bob)))
+        self.assertTrue(self.users.delete(ann))
+        with closing(connect(self.users.database)) as db:
+            counts = [db.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                      for t in ("flights", "mate_requests", "mates", "users")]
+        self.assertEqual(counts, [1, 0, 0, 1])
 
 
 class TestGoogleAccounts(UsersCase):

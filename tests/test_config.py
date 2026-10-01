@@ -107,5 +107,46 @@ class TestBaseUrl(unittest.TestCase):
         self.assertEqual(Config.from_env(both).base_url,
                          "https://wingmates.example")
 
+class TestTursoSettings(unittest.TestCase):
+
+    def test_without_settings_the_database_is_the_local_file(self):
+        c = Config.from_env({})
+        self.assertIsNone(c.turso)
+        self.assertEqual(c.database, c.db_path)
+
+    def test_environment_settings_select_turso(self):
+        c = Config.from_env({"TURSO_DATABASE_URL": "libsql://wm-b.turso.io",
+                             "TURSO_AUTH_TOKEN": "s3cret-token"})
+        self.assertEqual(c.database.url, "https://wm-b.turso.io")
+        self.assertIs(c.database, c.turso)
+        self.assertNotIn("s3cret-token", repr(c))
+
+    def test_one_setting_without_the_other_is_refused(self):
+        for env in ({"TURSO_DATABASE_URL": "libsql://wm-b.turso.io"},
+                    {"TURSO_AUTH_TOKEN": "t"}):
+            with self.assertRaises(ValueError) as cm:
+                Config.from_env(env)
+            self.assertIn("TURSO_AUTH_TOKEN", str(cm.exception))
+
+    def test_the_saved_file_is_used_only_when_asked_for(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "turso.json").write_text(json.dumps(
+                {"url": "libsql://wm-b.turso.io", "token": "t"}))
+            self.assertIsNone(Config.from_env({"WINGMATES_DATA_DIR": d}).turso)
+            c = Config.from_env({"WINGMATES_DATA_DIR": d,
+                                 "WINGMATES_USE_TURSO": "1"})
+            self.assertEqual(c.turso.url, "https://wm-b.turso.io")
+
+    def test_asking_for_the_file_when_it_is_missing_or_broken_is_refused(self):
+        with tempfile.TemporaryDirectory() as d:
+            for content in (None, "not json", '{"url": "libsql://x.turso.io"}'):
+                if content is not None:
+                    (Path(d) / "turso.json").write_text(content)
+                with self.assertRaises(ValueError) as cm:
+                    Config.from_env({"WINGMATES_DATA_DIR": d,
+                                     "WINGMATES_USE_TURSO": "1"})
+                self.assertIn("turso.json", str(cm.exception))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

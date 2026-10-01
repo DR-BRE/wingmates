@@ -7,8 +7,6 @@ account, and nothing under /api/ answers without one.
 from __future__ import annotations
 
 import secrets
-import sqlite3
-from contextlib import closing
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -21,6 +19,7 @@ from .adsb import FeedError
 from .airports import Airports
 from .auth import GoogleSignIn, persistent_key, safe_next
 from .config import Config
+from .db import readable
 from .history import OPTIONAL, History, template_csv
 from .mates import Mates
 from .users import Users, normalize_username, validate_username
@@ -61,8 +60,8 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
         MAX_CONTENT_LENGTH=MAX_REQUEST_BYTES,
     )
 
-    history = History(airports, config.db_path)
-    users = Users(config.db_path)
+    history = History(airports, config.database)
+    users = Users(config.database)
     mates = Mates(users, history)
     if google and sign_in is None:
         sign_in = GoogleSignIn(app, config.google_client_id,
@@ -169,13 +168,8 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
     # --------------------------------------------------------------- pages
     @app.get("/healthz")
     def healthz():
-        """Can the database be read? Opened read-only, so checking a missing
-        file does not create an empty one in its place."""
-        try:
-            with closing(sqlite3.connect(f"file:{config.db_path}?mode=ro",
-                                         uri=True)) as db:
-                db.execute("SELECT 1 FROM users LIMIT 1")
-        except sqlite3.Error:
+        """Can the database be read? Asking never creates a missing file."""
+        if not readable(config.database):
             return jsonify(ok=False), 503
         return jsonify(ok=True)
 

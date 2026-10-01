@@ -239,7 +239,7 @@ class TestPrivacy(MatesCase):
         self.assertIsNone(self.mates.routes(self.ann, self.ann))
 
     def test_a_flight_with_an_unknown_airport_is_skipped_not_fatal(self):
-        with closing(connect(self.history.path)) as db, db:
+        with closing(connect(self.history.database)) as db, db:
             db.execute("INSERT INTO flights (user_id, date, origin, dest,"
                        " distance_km, created_at) VALUES (?,?,?,?,?,?)",
                        (self.bob, "2025-01-01", "ZZZ", "ATL", 500.0, "t"))

@@ -12,9 +12,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from .turso import Turso
+
 DEFAULT_DATA_DIR = Path.home() / ".wingmates"
 DEFAULT_BASE_URL = "http://localhost:8817"
 GOOGLE_CLIENT_FILE = "google-client.json"
+TURSO_FILE = "turso.json"
 AUTH_MODES = ("local", "google")
 
 
@@ -77,6 +80,28 @@ def _google_client(env: Mapping[str, str], data_dir: Path) -> tuple[str, str]:
     return cid, secret
 
 
+def _turso(env: Mapping[str, str], data_dir: Path) -> Turso | None:
+    """The Turso database to use, if any. Set by environment on a host. The
+    saved file is for trying Turso from your own machine, and is used only
+    when asked for, so its presence never switches a local app silently."""
+    url, token = env.get("TURSO_DATABASE_URL"), env.get("TURSO_AUTH_TOKEN")
+    if url or token:
+        if not (url and token):
+            raise ValueError(
+                "TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be set together")
+        return Turso(url, token)
+    if not _flag(env, "WINGMATES_USE_TURSO", False):
+        return None
+    path = data_dir / TURSO_FILE
+    try:
+        saved = json.loads(path.read_text())
+        return Turso(saved["url"], saved["token"])
+    except (OSError, ValueError, KeyError, TypeError):
+        raise ValueError(
+            f"WINGMATES_USE_TURSO=1 needs {path} with a url and a token; "
+            "run tools/save_turso.py") from None
+
+
 @dataclass(frozen=True)
 class Config:
     auth: str = "local"
@@ -88,6 +113,7 @@ class Config:
     secret_key: str | None = field(default=None, repr=False)
     google_client_id: str | None = None
     google_client_secret: str | None = field(default=None, repr=False)
+    turso: Turso | None = None
 
     def __post_init__(self):
         # Frozen, so set through object: every Config holds the canonical form.
@@ -96,6 +122,11 @@ class Config:
     @property
     def db_path(self) -> Path:
         return self.data_dir / "flights.db"
+
+    @property
+    def database(self):
+        """Where the data lives: Turso when configured, else the local file."""
+        return self.turso or self.db_path
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> "Config":
@@ -119,4 +150,5 @@ class Config:
             secret_key=env.get("SECRET_KEY") or None,
             google_client_id=cid,
             google_client_secret=secret,
+            turso=_turso(env, data_dir),
         )

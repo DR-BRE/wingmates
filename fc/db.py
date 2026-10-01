@@ -11,6 +11,8 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .turso import Turso, TursoConnection
+
 SCHEMA_VERSION = 2
 LOCAL_USERNAME = "you"
 
@@ -67,8 +69,13 @@ _LEGACY_COLUMNS = ("id, date, origin, dest, airline, flight_number, aircraft,"
                    " seat, notes, distance_km, created_at")
 
 
-def connect(path: Path) -> sqlite3.Connection:
-    db = sqlite3.connect(path)
+def connect(database):
+    """A connection to a SQLite file, or to Turso. Both offer execute(),
+    executemany(), commit(), rollback(), close() and rows that take a column
+    name, which is all the stores use."""
+    if isinstance(database, Turso):
+        return TursoConnection(database)
+    db = sqlite3.connect(database)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     return db
@@ -90,6 +97,34 @@ def _version(db: sqlite3.Connection) -> int:
     return db.execute("PRAGMA user_version").fetchone()[0]
 
 
+def _if_missing(ddl: str) -> str:
+    return ddl.replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ", 1)
+
+
+def _init_turso(database: Turso) -> None:
+    """Create the tables on Turso if they are not there. A Turso database
+    starts empty, so there is nothing older to migrate from. One request."""
+    connect(database).batch(
+        [_if_missing(ddl).strip() for ddl in (_USERS, _FLIGHTS, _REQUESTS, _MATES)]
+        + ["CREATE INDEX IF NOT EXISTS flights_user_date"
+           " ON flights (user_id, date)"])
+
+
+def readable(database) -> bool:
+    """Can the users table be read? For the health check. A missing SQLite
+    file is opened read-only, so asking does not create one."""
+    try:
+        if isinstance(database, Turso):
+            connect(database).execute("SELECT 1 FROM users LIMIT 1")
+        else:
+            uri = Path(database).resolve().as_uri() + "?mode=ro"
+            with closing(sqlite3.connect(uri, uri=True)) as db:
+                db.execute("SELECT 1 FROM users LIMIT 1")
+    except sqlite3.Error:
+        return False
+    return True
+
+
 def _make_private(path: Path) -> None:
     """The database holds email addresses: owner-readable only."""
     try:
@@ -102,12 +137,14 @@ def _make_private(path: Path) -> None:
             "could not restrict %s to its owner: %s", path, type(e).__name__)
 
 
-def init(path: Path) -> None:
+def init(path) -> None:
     """Create the schema, or bring an older database up to it. A database
     already at the current version is left untouched.
 
     Version 0 is either empty or the single-user format (a bare flights
     table). Version 1 lacks users.session_epoch."""
+    if isinstance(path, Turso):
+        return _init_turso(path)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with closing(connect(path)) as db:
         version = _version(db)

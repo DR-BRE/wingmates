@@ -12,6 +12,7 @@ from flask import redirect
 
 from fc.config import Config
 from fc.hosted import build
+from fc.turso import Turso
 from fc.webapp import create_app
 from tests.helpers import stores
 
@@ -43,7 +44,8 @@ class SignInCase(unittest.TestCase):
         self.google = FakeSignIn()
         self.app = create_app(
             Config(auth="google", live=False, data_dir=self.dir, base_url=BASE,
-                   google_client_id="id", google_client_secret="secret"),
+                   google_client_id="id", google_client_secret="secret",
+                   turso=self.database if isinstance(self.database, Turso) else None),
             airports=self.airports, sign_in=self.google)
         self.client = self.app.test_client()
 
