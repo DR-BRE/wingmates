@@ -16,7 +16,7 @@ from pathlib import Path
 
 from .airports import Airports
 
-DB_FILE = Path.home() / ".flighty-clone" / "flights.db"
+DB_FILE = Path.home() / ".wingmates" / "flights.db"
 KM_PER_MILE = 1.609344
 EARTH_RADIUS_KM = 6371.0088
 

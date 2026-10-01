@@ -49,7 +49,7 @@ def main() -> int:
     print(f"  open   {url}")
     print(f"  feed   adsb.lol (primary) · opensky (fallback)")
     print(f"  poll   every {POLL_INTERVAL_S}s per tracked flight")
-    print(f"  state  ~/.flighty-clone/state.json · flights.db")
+    print(f"  state  ~/.wingmates/state.json · flights.db")
     print(f"\n  events appear below as they happen. ctrl-c to stop.\n")
 
     tracker.start()

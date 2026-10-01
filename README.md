@@ -26,7 +26,7 @@ python3 -m unittest discover -s tests -t .   # 40 offline tests
 
 ## My flights
 
-Everything here is stored locally in `~/.flighty-clone/flights.db` (SQLite).
+Everything here is stored locally in `~/.wingmates/flights.db` (SQLite).
 
 | | |
 |---|---|
@@ -74,7 +74,7 @@ limited by the 2048-px elevation map.
 | **Where's my plane** | Look up an airframe by registration (`G-RUKB`) and see what it's flying as right now. |
 | **Nearby radar** | Every aircraft within about 90 nm of the view centre (wider when zoomed out on the globe, capped at 250 nm), one click to track any of them. |
 | **Flight log** | Completed live-tracked flights with max altitude, max speed, duration. |
-| **Survives restart** | Tracked flights and the alert feed persist to `~/.flighty-clone/state.json`, written atomically. |
+| **Survives restart** | Tracked flights and the alert feed persist to `~/.wingmates/state.json`, written atomically. |
 
 Live-tracked flights and **My flights** are separate: tracking a flight does not
 add it to your history.

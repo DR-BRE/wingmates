@@ -19,7 +19,7 @@ from .adsb import Feed, FeedError
 from .schema import Event, EventType, FlightKey, FlightState, Phase
 from .statemachine import apply, check_stale
 
-STATE_DIR = Path.home() / ".flighty-clone"
+STATE_DIR = Path.home() / ".wingmates"
 STATE_FILE = STATE_DIR / "state.json"
 
 # These are deliberately conservative. adsb.lol and OpenSky are free and
