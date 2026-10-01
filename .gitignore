@@ -5,3 +5,5 @@ __pycache__/
 # local tool state
 .impeccable/
 .claude/settings.local.json
+.venv/
+.devdata/
