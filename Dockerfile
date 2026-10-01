@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY fc ./fc
 COPY web ./web
+COPY public ./public
 COPY data ./data
 
 # One worker process, several threads: SQLite on a local disk cannot have two

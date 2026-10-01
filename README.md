@@ -182,14 +182,16 @@ fc/auth.py              Google sign-in
 fc/webapp.py            Flask app: every HTTP route
 fc/hosted.py, wsgi.py   the app as a hosted server runs it (gunicorn)
 Dockerfile, render.yaml the container and the Render service
-web/social.js           Social tab
-web/login.html, welcome.html   sign-in and choose-a-username pages
+web/                    HTML pages: the app, sign-in, choose-a-username
+public/static/app.js    live tracker UI and the flat map (Leaflet)
+public/static/history.js   My flights UI: form, list, edit, route drawing
+public/static/social.js    Social tab
+public/static/globe.js  3D globe (three.js), loaded as an ES module
+public/static/style.css styles
+wsgi.py                 entry point for Vercel
+fc/turso.py             Turso client: SQL over HTTP, shaped like sqlite3
 requirements.txt        Flask, Authlib, requests, gunicorn
 data/airports.csv       airport table (OurAirports, public domain)
-web/index.html          page: My flights / Live tabs, map and globe
-web/app.js              live tracker UI and the flat map (Leaflet)
-web/history.js          My flights UI: form, list, edit, route drawing
-web/globe.js            3D globe (three.js), loaded as an ES module
 tests/                  offline tests — no network required
 ```
 

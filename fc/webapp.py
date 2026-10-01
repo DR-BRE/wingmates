@@ -24,7 +24,9 @@ from .history import OPTIONAL, History, template_csv
 from .mates import Mates
 from .users import Users, normalize_username, validate_username
 
-WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+ROOT = Path(__file__).resolve().parent.parent
+WEB_DIR = ROOT / "web"                       # HTML pages, served by routes
+STATIC_DIR = ROOT / "public" / "static"      # .js and .css, served at /static/
 
 # The largest id SQLite can hold. Anything beyond it cannot name a row.
 MAX_ID = 2 ** 63 - 1
@@ -46,7 +48,7 @@ class ApiError(Exception):
 def create_app(config: Config, tracker=None, airports: Airports | None = None,
                sign_in=None) -> Flask:
     google = config.auth == "google"
-    app = Flask(__name__, static_folder=str(WEB_DIR), static_url_path="/static")
+    app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
     # Real accounts need a key that survives restarts, or everyone is signed
     # out each time. Local mode has nothing to keep.
     app.secret_key = config.secret_key or (
