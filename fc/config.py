@@ -48,6 +48,16 @@ def normalize_base_url(raw: str) -> str:
         f":{port}" if port and port != default else "")
 
 
+def _base_url(env: Mapping[str, str]) -> str:
+    """The address people use. On Render the service's own hostname is known,
+    so nothing needs setting until a custom domain is added."""
+    explicit = env.get("WINGMATES_BASE_URL")
+    if explicit:
+        return explicit
+    render_host = env.get("RENDER_EXTERNAL_HOSTNAME")
+    return f"https://{render_host}" if render_host else DEFAULT_BASE_URL
+
+
 def _google_client(env: Mapping[str, str], data_dir: Path) -> tuple[str, str]:
     """Client id and secret: from the environment, or from the file Google's
     console downloads, saved in the data directory."""
@@ -105,7 +115,7 @@ class Config:
             # Switching users without signing in must never work on a real site.
             dev_users=_flag(env, "WINGMATES_DEV_USERS", False) and local,
             data_dir=data_dir,
-            base_url=env.get("WINGMATES_BASE_URL") or DEFAULT_BASE_URL,
+            base_url=_base_url(env),
             secret_key=env.get("SECRET_KEY") or None,
             google_client_id=cid,
             google_client_secret=secret,

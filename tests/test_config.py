@@ -99,5 +99,13 @@ class TestBaseUrl(unittest.TestCase):
             self.assertIn("WINGMATES_BASE_URL", str(cm.exception))
 
 
+    def test_on_render_it_defaults_to_the_services_own_address(self):
+        render = {"RENDER_EXTERNAL_HOSTNAME": "wingmates-x1y2.onrender.com"}
+        self.assertEqual(Config.from_env(render).base_url,
+                         "https://wingmates-x1y2.onrender.com")
+        both = {**render, "WINGMATES_BASE_URL": "https://wingmates.example"}
+        self.assertEqual(Config.from_env(both).base_url,
+                         "https://wingmates.example")
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

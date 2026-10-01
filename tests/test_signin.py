@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from flask import redirect
 
 from fc.config import Config
+from fc.hosted import build
 from fc.webapp import create_app
 from tests.helpers import stores
 
@@ -296,6 +297,58 @@ class TestReviewFindings(SignInCase):
         for base in ("http://LocalHost", "http://localhost:80", "http://localhost/"):
             with self.google_app(base_url=base).test_client().get("/login") as r:
                 self.assertEqual(r.status_code, 200, base)
+
+
+class TestHosted(unittest.TestCase):
+
+    def setUp(self):
+        self.dir, self.airports, _, _ = stores(self)
+        self.google = FakeSignIn()
+        self.env = {"WINGMATES_AUTH": "google", "WINGMATES_DATA_DIR": str(self.dir),
+                    "GOOGLE_CLIENT_ID": "id", "GOOGLE_CLIENT_SECRET": "secret",
+                    "SECRET_KEY": "a-fixed-key", "WINGMATES_BASE_URL": BASE}
+
+    def signed_in_cookie(self, app):
+        client = app.test_client()
+        self.google.profile = BRETT
+        client.get(client.get("/auth/login").headers["Location"])
+        return client.get_cookie("session").value
+
+    def test_it_refuses_to_start_without_sign_in(self):
+        for env in ({"WINGMATES_DATA_DIR": str(self.dir)},
+                    {"WINGMATES_AUTH": "local", "WINGMATES_DATA_DIR": str(self.dir)}):
+            with self.assertRaises(RuntimeError) as cm:
+                build(env)
+            self.assertIn("WINGMATES_AUTH=google", str(cm.exception))
+
+    def test_it_builds_a_signed_out_app_that_passes_its_health_check(self):
+        client = build(self.env, sign_in=self.google).test_client()
+        self.assertEqual(client.get("/healthz").get_json(), {"ok": True})
+        self.assertEqual(client.get("/").headers["Location"], "/login")
+        self.assertEqual(client.get("/api/me").status_code, 401)
+
+    def test_it_never_runs_the_live_tracker(self):
+        app = build({**self.env, "WINGMATES_LIVE": "1"}, sign_in=self.google)
+        client = app.test_client()
+        client.set_cookie("session", self.signed_in_cookie(app))
+        client.post("/api/username", json={"username": "brett"}, headers=ORIGIN)
+        self.assertFalse(client.get("/api/me").get_json()["live"])
+        self.assertEqual(client.get("/api/state").status_code, 404)
+
+    def test_people_and_their_flights_survive_a_redeploy(self):
+        first = build(self.env, sign_in=self.google)
+        cookie = self.signed_in_cookie(first)
+        before = first.test_client()
+        before.set_cookie("session", cookie)
+        before.post("/api/username", json={"username": "brett"}, headers=ORIGIN)
+        before.post("/api/history", headers=ORIGIN,
+                    json={"date": "2024-03-09", "from": "ATL", "to": "LHR"})
+
+        # A redeploy is a new process over the same disk and the same settings.
+        after = build(self.env, sign_in=self.google).test_client()
+        after.set_cookie("session", cookie)
+        self.assertEqual(after.get("/api/me").get_json()["username"], "brett")
+        self.assertEqual(len(after.get("/api/history").get_json()["flights"]), 1)
 
 
 if __name__ == "__main__":
