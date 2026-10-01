@@ -3,6 +3,7 @@ format. Stores build on this; nothing here knows about HTTP.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 from contextlib import closing
@@ -88,16 +89,23 @@ def _version(db: sqlite3.Connection) -> int:
     return db.execute("PRAGMA user_version").fetchone()[0]
 
 
+def _make_private(path: Path) -> None:
+    """The database holds email addresses: owner-readable only."""
+    if path.exists() and (path.stat().st_mode & 0o777) != 0o600:
+        os.chmod(path, 0o600)
+
+
 def init(path: Path) -> None:
     """Create the schema, or bring an older database up to it. A database
     already at the current version is left untouched.
 
     Version 0 is either empty or the single-user format (a bare flights
     table). Version 1 lacks users.session_epoch."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     with closing(connect(path)) as db:
         version = _version(db)
         if version >= SCHEMA_VERSION:
+            _make_private(path)
             return
         legacy = version == 0 and db.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table'"
@@ -124,6 +132,7 @@ def init(path: Path) -> None:
         except BaseException:
             db.rollback()
             raise
+    _make_private(path)
 
 
 def _create(db: sqlite3.Connection, legacy: bool) -> None:

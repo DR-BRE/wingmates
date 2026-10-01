@@ -28,19 +28,36 @@ def safe_next(value) -> str:
 
 def persistent_key(data_dir: Path) -> str:
     """The key that signs session cookies, kept in the data directory so
-    sign-ins survive a restart. Created on first use, owner-readable only."""
-    data_dir.mkdir(parents=True, exist_ok=True)
+    sign-ins survive a restart. Created on first use, owner-readable only.
+
+    The key is written to a temporary file and then linked into place. A link
+    either publishes the whole file or fails because another process got
+    there first, so no process ever reads a half-written key and all of them
+    end up using the same one."""
+    data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     path = data_dir / "secret_key"
-    if path.exists():
-        key = path.read_text().strip()
+    for _ in range(3):
+        try:
+            key = path.read_text().strip()
+        except FileNotFoundError:
+            key = None
         if key:
             return key
-        path.unlink()
-    key = secrets.token_hex(32)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(key)
-    return key
+        if key == "":
+            path.unlink(missing_ok=True)       # an empty file is no key
+        fresh = secrets.token_hex(32)
+        tmp = data_dir / f".secret_key.{os.getpid()}.{secrets.token_hex(4)}"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(fresh)
+        try:
+            os.link(tmp, path)
+            return fresh
+        except FileExistsError:
+            continue                           # someone else won; read theirs
+        finally:
+            tmp.unlink()
+    raise RuntimeError(f"could not establish a session key in {data_dir}")
 
 
 class GoogleSignIn:

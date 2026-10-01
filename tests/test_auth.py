@@ -1,4 +1,5 @@
 """Sign-in helper tests. Offline: nothing here contacts Google."""
+import os
 import stat
 import sys
 import tempfile
@@ -48,6 +49,25 @@ class TestPersistentKey(unittest.TestCase):
         self.dir.mkdir(parents=True)
         (self.dir / "secret_key").write_text("")
         self.assertEqual(len(persistent_key(self.dir)), 64)
+
+
+    def test_losing_a_start_up_race_adopts_the_winners_key(self):
+        self.dir.mkdir(parents=True)
+        real_link = os.link
+
+        def another_process_wins(src, dst):
+            Path(dst).write_text("the-winners-key")
+            raise FileExistsError(dst)
+
+        with mock.patch("fc.auth.os.link", side_effect=another_process_wins):
+            self.assertEqual(persistent_key(self.dir), "the-winners-key")
+        self.assertEqual(persistent_key(self.dir), "the-winners-key")
+        self.assertEqual([p.name for p in self.dir.iterdir()], ["secret_key"])
+        self.assertIs(os.link, real_link)
+
+    def test_the_data_directory_is_created_private(self):
+        persistent_key(self.dir)
+        self.assertEqual(stat.S_IMODE(self.dir.stat().st_mode), 0o700)
 
 
 class Unrelated(Exception):

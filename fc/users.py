@@ -63,18 +63,15 @@ class Users:
         a new email address does not make a second account."""
         name = (name or "").strip() or (email or "").split("@")[0] or "Wingmate"
         with closing(connect(self.path)) as db, db:
-            row = db.execute("SELECT id FROM users WHERE google_sub = ?",
-                             (sub,)).fetchone()
-            if row:
-                uid = row["id"]
-                db.execute("UPDATE users SET email = ?, name = ?, picture_url = ?"
-                           " WHERE id = ?", (email, name, picture_url, uid))
-            else:
-                uid = db.execute(
-                    "INSERT INTO users (google_sub, email, name, picture_url,"
-                    " created_at) VALUES (?,?,?,?,?)",
-                    (sub, email, name, picture_url,
-                     datetime.now(UTC).isoformat())).lastrowid
+            # One statement, so two first sign-ins at once cannot both insert.
+            db.execute(
+                "INSERT INTO users (google_sub, email, name, picture_url,"
+                " created_at) VALUES (?,?,?,?,?)"
+                " ON CONFLICT(google_sub) DO UPDATE SET email = excluded.email,"
+                " name = excluded.name, picture_url = excluded.picture_url",
+                (sub, email, name, picture_url, datetime.now(UTC).isoformat()))
+            uid = db.execute("SELECT id FROM users WHERE google_sub = ?",
+                             (sub,)).fetchone()["id"]
         return self.get(uid)
 
     def set_username(self, user_id: int, raw: str) -> dict:

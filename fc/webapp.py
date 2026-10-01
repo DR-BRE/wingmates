@@ -317,6 +317,10 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
     if google:
         @app.get("/auth/login")
         def auth_login():
+            # Each attempt leaves a state entry in the cookie. Clear the old
+            # ones, or enough abandoned attempts would outgrow the cookie.
+            for key in [k for k in session if k.startswith("_state_")]:
+                session.pop(key)
             session["next"] = safe_next(request.args.get("next"))
             try:
                 return sign_in.begin(config.base_url + "/auth/callback")

@@ -162,6 +162,17 @@ class TestSignIn(SignInCase):
             self.assertEqual(done.headers["Location"], "/", bad)
 
 
+    def test_abandoned_attempts_do_not_pile_up_in_the_cookie(self):
+        client = self.app.test_client()
+        with client.session_transaction() as s:
+            for i in range(10):
+                s[f"_state_google_{i}"] = {"data": "x"}
+        self.google.profile = BRETT
+        client.get("/auth/login")
+        with client.session_transaction() as s:
+            self.assertEqual([k for k in s if k.startswith("_state_google_")], [])
+
+
 class TestSessions(SignInCase):
 
     def test_the_cookie_is_httponly_lax_and_lasts_thirty_days(self):

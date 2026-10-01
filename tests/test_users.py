@@ -1,5 +1,6 @@
 """User store tests. Offline: a temp database."""
 import sys
+import threading
 import tempfile
 import unittest
 from pathlib import Path
@@ -105,6 +106,24 @@ class TestGoogleAccounts(UsersCase):
         self.google()
         self.assertIsNone(self.users.by_username(""))
         self.assertIsNone(self.users.by_username("None"))
+
+
+    def test_simultaneous_first_sign_ins_make_one_account(self):
+        results, errors = [], []
+
+        def sign_in():
+            try:
+                results.append(self.google("g-new")["id"])
+            except Exception as e:                       # noqa: BLE001
+                errors.append(e)
+
+        threads = [threading.Thread(target=sign_in) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(len(set(results)), 1)
 
 
 class TestSetUsername(UsersCase):

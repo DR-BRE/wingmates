@@ -1,5 +1,6 @@
 """Schema and migration tests. Offline: temp files only."""
 import sqlite3
+import stat
 import sys
 import tempfile
 import unittest
@@ -76,6 +77,19 @@ class TestFresh(DbCase):
         db.init(self.path)
         with closing(db.connect(self.path)) as c, c:
             self.assertEqual(db.ensure_local_user(c), db.ensure_local_user(c))
+
+
+    def test_the_database_and_a_new_data_directory_are_private(self):
+        path = self.path.parent / "new" / "flights.db"
+        db.init(path)
+        self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode), 0o700)
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_an_existing_database_is_made_private_on_start(self):
+        db.init(self.path)
+        self.path.chmod(0o644)
+        db.init(self.path)
+        self.assertEqual(stat.S_IMODE(self.path.stat().st_mode), 0o600)
 
 
 class TestMigration(DbCase):
