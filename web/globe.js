@@ -351,9 +351,14 @@ function setNearby(list) {
 }
 
 // ------------------------------------------------------------ flight history
-let routeLine = null;
-let routeData = [];
-let dots = [];                     // {el, lat, lon, pos}
+// Two independent sets of routes: the user's own, and one mate's.
+function routeLayer(colour, dotClass) {
+  return { colour, dotClass, routes: [], line: null, dots: [] };
+}
+const layers = {
+  mine: routeLayer('#5fd0dd', 'gdot'),
+  mate: routeLayer('#f08a6b', 'gdot mate'),
+};
 
 // Great-circle arc from a to b ([lat, lon]) that lifts off the surface in the
 // middle, returned as segment pairs for one batched line.
@@ -377,34 +382,34 @@ function arcSegments(a, b, out) {
   }
 }
 
-function buildRoutes() {
-  if (routeLine) {
-    scene.remove(routeLine);
-    routeLine.geometry.dispose();
-    routeLine.material.dispose();
-    routeLine = null;
+function buildLine(layer) {
+  if (layer.line) {
+    scene.remove(layer.line);
+    layer.line.geometry.dispose();
+    layer.line.material.dispose();
+    layer.line = null;
   }
-  if (!routeData.length) return;
+  if (!layer.routes.length) return;
   const positions = [];
-  for (const r of routeData) arcSegments(r.a, r.b, positions);
+  for (const r of layer.routes) arcSegments(r.a, r.b, positions);
   const geo = new LineSegmentsGeometry();
   geo.setPositions(positions);
   // Opaque on purpose: segment ends overlap, and any blending beads the line.
-  const mat = new LineMaterial({ color: '#5fd0dd', linewidth: 1.8 });
+  const mat = new LineMaterial({ color: layer.colour, linewidth: 1.8 });
   mat.resolution.set(w || 1, h || 1);
-  routeLine = new LineSegments2(geo, mat);
-  scene.add(routeLine);
+  layer.line = new LineSegments2(geo, mat);
+  scene.add(layer.line);
 }
 
 // routes: [{a: [lat, lon], b: [lat, lon]}], one per distinct airport pair.
 // airports: [{lat, lon, code, name}]
-function setRoutes(routes, airports) {
-  routeData = routes;
-  buildRoutes();
-  for (const d of dots) d.el.remove();
-  dots = airports.map(a => {
+function setLayer(layer, routes, airports) {
+  layer.routes = routes;
+  buildLine(layer);
+  for (const d of layer.dots) d.el.remove();
+  layer.dots = airports.map(a => {
     const el = document.createElement('div');
-    el.className = 'gdot';
+    el.className = layer.dotClass;
     const tag = document.createElement('span');
     tag.className = 'tag';
     tag.textContent = a.code;
@@ -415,6 +420,8 @@ function setRoutes(routes, airports) {
   });
   dirty = true;
 }
+const setRoutes = (routes, airports) => setLayer(layers.mine, routes, airports);
+const setMateRoutes = (routes, airports) => setLayer(layers.mate, routes, airports);
 
 // Frame both ends of a route.
 function flyToRoute(a, b) {
@@ -530,7 +537,9 @@ function resize() {
   camera.fov = w < h ? Math.min(70, 38 * h / w) : 38;
   camera.updateProjectionMatrix();
   for (const t of trails.values()) t.line.material.resolution.set(w, h);
-  if (routeLine) routeLine.material.resolution.set(w, h);
+  for (const layer of Object.values(layers)) {
+    if (layer.line) layer.line.material.resolution.set(w, h);
+  }
   dirty = true;
 }
 
@@ -558,7 +567,7 @@ function layout() {
   const horizon = 1 / d + 0.02;
   for (const m of tracked.values()) layoutMarker(m, camDir, horizon);
   for (const m of nearby) layoutMarker(m, camDir, horizon);
-  for (const m of dots) {
+  for (const m of [...layers.mine.dots, ...layers.mate.dots]) {
     if (m.pos.clone().normalize().dot(camDir) < horizon) {
       m.el.style.display = 'none';
       continue;
@@ -612,8 +621,10 @@ function frame(now) {
     try { heights = ctx.getImageData(0, 0, HW, HH).data; } catch (e) { return; }
     for (const m of tracked.values()) place(m);
     for (const m of nearby) place(m);
-    for (const m of dots) m.pos = surface(m.lat, m.lon);
-    buildRoutes();
+    for (const layer of Object.values(layers)) {
+      for (const m of layer.dots) m.pos = surface(m.lat, m.lon);
+      buildLine(layer);
+    }
     if (popup) popup.pos = surface(popup.lat, popup.lon);
     dirty = true;
   };
@@ -626,7 +637,7 @@ requestAnimationFrame(frame);
 
 window.Globe3D = {
   setTracked, setNearby, clearNearby, showPopup, closePopup,
-  setRoutes, flyTo, flyToRoute, getCenter, viewRadiusNm,
+  setRoutes, setMateRoutes, flyTo, flyToRoute, getCenter, viewRadiusNm,
   onSelect(fn) { onSelect = fn; },
 };
 window.dispatchEvent(new Event('globe-ready'));

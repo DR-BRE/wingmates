@@ -22,6 +22,7 @@
   <aside class="side">
     <div class="tabs" role="tablist">
       <button role="tab" id="tab-history" class="on">My flights</button>
+      <button role="tab" id="tab-social">Social<span class="badge" id="social-badge" hidden></span></button>
       <button role="tab" id="tab-live" class="live-only">Live</button>
     </div>
 
@@ -70,6 +71,32 @@
         <div id="h-list" class="log"></div>
         <p class="empty" id="h-empty">No flights yet. Add your first one above.</p>
       </section>
+    </div>
+
+    <div id="pane-social" hidden>
+      <form class="add" id="find-form" autocomplete="off">
+        <label for="find-user">Find a mate</label>
+        <div class="row">
+          <input id="find-user" placeholder="@username" spellcheck="false"
+                 autocapitalize="none" aria-label="Username">
+          <button type="submit" id="find-btn">Find</button>
+        </div>
+        <p class="hint" id="find-hint">Type their exact username.</p>
+      </form>
+      <div id="find-card" class="log"></div>
+
+      <section id="req-section" hidden>
+        <h2>Requests <span class="count" id="req-count">0</span></h2>
+        <div id="req-list" class="log"></div>
+      </section>
+
+      <section>
+        <h2>Mates <span class="count" id="mates-count">0</span></h2>
+        <div id="board" class="log"></div>
+        <p class="empty" id="mates-empty">No mates yet. Find one by username above.</p>
+      </section>
+
+      <section id="h2h" hidden></section>
     </div>
 
     <div id="pane-live" hidden>
@@ -133,5 +160,6 @@
 <script type="module" src="/static/globe.js"></script>
 <script defer src="/static/app.js"></script>
 <script defer src="/static/history.js"></script>
+<script defer src="/static/social.js"></script>
 </body>
 </html>
