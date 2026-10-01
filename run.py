@@ -8,12 +8,15 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import threading
 import webbrowser
 
-from fc.server import serve
+from fc import tracker as tracker_mod
+from fc.config import Config
 from fc.tracker import POLL_INTERVAL_S, Tracker
+from fc.webapp import create_app
 
 BANNER = r"""
   █   █  ███  █   █   ███   █   █   ███   █████  █████   ████
@@ -33,36 +36,47 @@ def main() -> int:
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()
 
-    print(BANNER)
-    tracker = Tracker()
-    if tracker.flights:
-        print(f"  resumed {len(tracker.flights)} flight(s) from earlier today")
-
     try:
-        httpd = serve(tracker, args.host, args.port)
-    except OSError as e:
-        print(f"  cannot bind {args.host}:{args.port} — {e}")
-        print(f"  try: python3 run.py --port {args.port + 1}")
+        cfg = Config.from_env()
+    except ValueError as e:
+        print(f"  configuration error: {e}")
         return 1
+
+    print(BANNER)
+    tracker = None
+    if cfg.live:
+        # The tracker reads these module globals when it loads and saves.
+        tracker_mod.STATE_DIR = cfg.data_dir
+        tracker_mod.STATE_FILE = cfg.data_dir / "state.json"
+        tracker = Tracker()
+        if tracker.flights:
+            print(f"  resumed {len(tracker.flights)} tracked flight(s)")
+
+    app = create_app(cfg, tracker)
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
     url = f"http://{args.host}:{args.port}"
     print(f"  open   {url}")
-    print(f"  feed   adsb.lol (primary) · opensky (fallback)")
-    print(f"  poll   every {POLL_INTERVAL_S}s per tracked flight")
-    print(f"  state  ~/.wingmates/state.json · flights.db")
-    print(f"\n  events appear below as they happen. ctrl-c to stop.\n")
+    print(f"  data   {cfg.data_dir}")
+    if tracker:
+        print(f"  live   adsb.lol (primary) · opensky (fallback),"
+              f" every {POLL_INTERVAL_S}s")
+    else:
+        print("  live   off")
+    if cfg.dev_users:
+        print("  dev    user switching is ON; do not expose this server")
+    print("\n  ctrl-c to stop.\n")
 
-    tracker.start()
+    if tracker:
+        tracker.start()
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
     try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\n  stopping…")
+        app.run(host=args.host, port=args.port, threaded=True, use_reloader=False)
     finally:
-        tracker.stop()
-        httpd.shutdown()
+        if tracker:
+            tracker.stop()
     return 0
 
 
