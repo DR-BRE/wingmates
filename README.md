@@ -30,7 +30,8 @@ By default there is no sign-in: on your own machine every request acts as one
 local user, `@you`. To have people sign in with Google, see
 [docs/google-sign-in-setup.md](docs/google-sign-in-setup.md).
 
-To put it on the internet for friends, see
+To put it on the internet for friends, free, see
+[docs/deploy-vercel.md](docs/deploy-vercel.md). A paid alternative is in
 [docs/deploy-render.md](docs/deploy-render.md).
 
 ### Settings
@@ -44,6 +45,8 @@ To put it on the internet for friends, see
 | `WINGMATES_BASE_URL` | `http://localhost:8817` | The address people use. Google returns sign-ins here, and the app only answers to this host and the local names. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from `~/.wingmates/google-client.json` | The Google client, when not using the downloaded file. |
 | `SECRET_KEY` | generated, kept in `~/.wingmates/secret_key` | Signs session cookies. |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | unset | Keep the data in a Turso database instead of the local file. `SECRET_KEY` is then required. |
+| `WINGMATES_USE_TURSO` | `0` | `1` uses the Turso settings saved in `~/.wingmates/turso.json`, for trying Turso from your own machine. |
 
 ## My flights
 

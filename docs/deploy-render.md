@@ -1,5 +1,7 @@
 # Deploying Wingmates on Render
 
+This is the paid route. For a free one, see [deploy-vercel.md](deploy-vercel.md).
+
 Wingmates runs as one small web service with a 1 GB disk. Render's free
 instances sleep and cannot have a disk, so this uses the smallest paid
 instance: about $7 a month, plus $0.25 a month for the disk.
