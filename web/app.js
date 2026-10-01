@@ -85,6 +85,12 @@ function toast(msg, bad) {
 async function api(path, opts) {
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({ error: 'bad response' }));
+  // A session that has expired, or an account with no username yet, cannot
+  // use the app: go to the page that fixes it.
+  if (res.status === 401) location.href = '/login';
+  if (res.status === 409 && data.error === 'choose a username first') {
+    location.href = '/welcome';
+  }
   if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
   return data;
 }
@@ -99,6 +105,14 @@ const post = (path, body) => api(path, {
 // Values from the feed and from other people are never trusted as HTML.
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function avatar(p) {
+  const url = p.picture_url || '';
+  // Only https pictures are ever used as an image source.
+  return url.startsWith('https://')
+    ? `<img class="av" src="${esc(url)}" alt="" referrerpolicy="no-referrer">`
+    : `<span class="av">${esc((p.name || p.username || '?').charAt(0).toUpperCase())}</span>`;
+}
 
 // ------------------------------------------------------------ render: state
 function renderStatus(s) {
@@ -364,6 +378,37 @@ $('btn-map').addEventListener('click', () => setView('map'));
 
 function renderWho(me) {
   const who = $('who');
+  if (me.auth === 'google') {
+    who.innerHTML = `<details class="acct">
+        <summary>${avatar(me)}<span class="me">@${esc(me.username)}</span></summary>
+        <div class="menu">
+          <button id="acct-out" class="quiet">Sign out</button>
+          <button id="acct-del" class="quiet">Delete account</button>
+          <form id="del-form" hidden autocomplete="off">
+            <p>This removes your account and every flight you have logged.
+               It cannot be undone.</p>
+            <input id="del-confirm" placeholder="Type DELETE" spellcheck="false">
+            <button type="submit" class="danger">Delete forever</button>
+          </form>
+        </div>
+      </details>`;
+    $('acct-out').addEventListener('click', async () => {
+      try { await post('/auth/logout'); location.href = '/login'; }
+      catch (err) { toast(err.message, true); }
+    });
+    $('acct-del').addEventListener('click', () => {
+      $('del-form').hidden = false;
+      $('del-confirm').focus();
+    });
+    $('del-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        await post('/api/account/delete', { confirm: $('del-confirm').value });
+        location.href = '/login';
+      } catch (err) { toast(err.message, true); }
+    });
+    return;
+  }
   who.innerHTML = `<span class="me">@${esc(me.username)}</span>` + (me.dev_users
     ? `<form id="dev-form"><input id="dev-user" placeholder="dev: switch user"
          spellcheck="false" autocapitalize="none"></form>` : '');

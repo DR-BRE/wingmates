@@ -12,14 +12,6 @@ let openMateId = null;      // the mate shown head-to-head, if any
 
 const laps = mi => (mi / EARTH_MI).toFixed(1);
 
-function avatar(p) {
-  const url = p.picture_url || '';
-  // Only https pictures are ever used as an image source.
-  return url.startsWith('https://')
-    ? `<img class="av" src="${esc(url)}" alt="" referrerpolicy="no-referrer">`
-    : `<span class="av">${esc((p.name || p.username || '?').charAt(0).toUpperCase())}</span>`;
-}
-
 function person(p) {
   return `${avatar(p)}<span class="pn"><b>${esc(p.name)}</b>
     <span class="un">@${esc(p.username)}</span></span>`;
