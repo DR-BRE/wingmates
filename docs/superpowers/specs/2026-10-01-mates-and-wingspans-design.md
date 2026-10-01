@@ -110,6 +110,7 @@ users
   email        TEXT
   name         TEXT NOT NULL
   picture_url  TEXT
+  session_epoch INTEGER NOT NULL DEFAULT 0   -- raised on sign-out
   created_at   TEXT NOT NULL
 
 flights                              -- existing table, plus:
@@ -209,9 +210,14 @@ answer as for a user who does not exist.
   chosen. Deleting is allowed so that someone who signs in and changes their
   mind can leave. A taken, reserved
   or badly formed username is refused with a message saying which.
-- The session is Flask's signed cookie holding only the user id. It is
-  HttpOnly, SameSite=Lax, Secure when the base URL is https, and lasts 30
-  days.
+- The session is Flask's signed cookie holding the user id and the account's
+  session epoch. It is HttpOnly, SameSite=Lax, Secure when the base URL is
+  https, and lasts 30 days.
+- **Signing out ends every session of the account, on every device.** A
+  signed cookie cannot be recalled, so each account has a counter, its
+  session epoch. A cookie is valid only while the epoch it was issued under
+  is still the account's current one, and signing out raises it. Without
+  this, a copy of a cookie taken before sign-out would keep working.
 - Every `/api/` route requires a signed-in user and answers 401 otherwise,
   including `/api/me`, which the page uses to find out whether it is signed
   in. Pages redirect to the sign-in page instead.
@@ -357,8 +363,18 @@ are only used as `img src` and only when they start with `https://`.
   variables and never committed.
 - Backups: the host's disk snapshots, to be switched on at deploy time. Each
   user can also export their own flights as CSV.
-- The specific host is chosen at the deploy step, after checking current
-  pricing and storage options.
+- The host is Render, chosen on 2026-10-01: its smallest paid web service
+  (about $7 a month) with a 1 GB disk ($0.25 per GB a month), deployed from
+  the `main` branch on GitHub by `render.yaml`. Render snapshots the disk
+  daily and keeps snapshots at least seven days. A service with a disk runs
+  as a single instance and is briefly unavailable during each deploy.
+- The hosted entry point refuses to start unless auth is `google`, and never
+  runs the live tracker.
+- `GET /healthz` is exempt from the known-host rule and from sign-in, because
+  the host's health checker calls from inside its own network. It reports
+  only whether the database can be read.
+- When `WINGMATES_BASE_URL` is unset on Render, the service's own
+  `onrender.com` address is used.
 
 ## Build order
 
