@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flighty Clone — Live Flight Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><span class="glyph">✈</span> FLIGHTY<span class="dim">CLONE</span></div>
+  <div class="status" id="status">
+    <span class="pill" id="pill-source">connecting…</span>
+    <span class="pill quiet" id="pill-tracked">0 tracked</span>
+    <span class="pill quiet" id="pill-poll">—</span>
+  </div>
+</header>
+
+<main>
+  <aside class="side">
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-history" class="on">My flights</button>
+      <button role="tab" id="tab-live">Live</button>
+    </div>
+
+    <div id="pane-history">
+      <form class="add" id="hist-form" autocomplete="off">
+        <label for="h-from" id="h-label">Add a flight</label>
+        <div class="row">
+          <input id="h-from" list="apt-list" placeholder="From  ATL"
+                 spellcheck="false" required aria-label="From airport">
+          <input id="h-to" list="apt-list" placeholder="To  LHR"
+                 spellcheck="false" required aria-label="To airport">
+          <input id="h-date" type="date" required aria-label="Date">
+        </div>
+        <datalist id="apt-list"></datalist>
+        <details class="more">
+          <summary>More details</summary>
+          <div class="row">
+            <input id="h-airline" placeholder="Airline">
+            <input id="h-flight" placeholder="Flight no." spellcheck="false">
+          </div>
+          <div class="row">
+            <input id="h-aircraft" placeholder="Aircraft" spellcheck="false">
+            <input id="h-seat" placeholder="Seat" spellcheck="false">
+          </div>
+          <div class="row"><input id="h-notes" placeholder="Notes"></div>
+        </details>
+        <div class="row actions">
+          <button type="submit" id="h-add">Add flight</button>
+          <button type="button" id="h-cancel" hidden>Cancel</button>
+          <button type="button" id="h-import">Import CSV</button>
+          <a class="link" href="/api/history/template.csv" download>Template</a>
+        </div>
+        <input type="file" id="h-file" accept=".csv,text/csv" hidden>
+        <p class="hint" id="h-hint">Airport codes and a date are all you need.
+           For a CSV, dates are YYYY-MM-DD.</p>
+      </form>
+
+      <section>
+        <h2>Totals</h2>
+        <dl class="stats" id="h-stats"></dl>
+      </section>
+
+      <section>
+        <h2>Flights <span class="count" id="h-count">0</span></h2>
+        <div id="h-list" class="log"></div>
+        <p class="empty" id="h-empty">No flights yet. Add your first one above.</p>
+      </section>
+    </div>
+
+    <div id="pane-live" hidden>
+    <form class="add" id="add-form" autocomplete="off">
+      <label for="cs">Track a flight</label>
+      <div class="row">
+        <input id="cs" name="cs" placeholder="e.g. DAL983, UAL1, BAW117" spellcheck="false">
+        <button type="submit" id="add-btn">Track</button>
+      </div>
+      <p class="hint" id="add-hint">ADS-B callsign, not the marketing number.
+         The aircraft must be powered on and in receiver coverage.</p>
+    </form>
+
+    <section>
+      <h2>Tracking <span class="count" id="flights-count">0</span></h2>
+      <div id="flights" class="cards"></div>
+      <p class="empty" id="flights-empty">Nothing tracked yet. Use “Nearby” on the
+         map to find a live callsign, then track it.</p>
+    </section>
+
+    <section>
+      <h2>Alerts</h2>
+      <div id="alerts" class="feed"></div>
+      <p class="empty" id="alerts-empty">Alerts appear here as flights change state.</p>
+    </section>
+
+    <section>
+      <h2>Flight log <span class="count" id="log-count">0</span></h2>
+      <div id="log" class="log"></div>
+    </section>
+    </div>
+  </aside>
+
+  <div class="mapwrap">
+    <div id="map"></div>
+    <div id="globe" hidden></div>
+    <div class="maptools">
+      <div class="viewtoggle" id="viewtoggle" hidden>
+        <button id="btn-globe" title="3D globe">Globe</button>
+        <button id="btn-map" title="Flat map, better for close-up">Map</button>
+      </div>
+      <button id="btn-nearby" title="Show aircraft around the map centre">Nearby</button>
+      <button id="btn-clear" title="Hide nearby aircraft">Clear</button>
+      <button id="btn-refresh" title="Poll the feed now">Poll now</button>
+      <form id="reg-form" class="reg">
+        <input id="reg" placeholder="Where's N123AB?" spellcheck="false">
+        <button type="submit">Find</button>
+      </form>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="importmap">
+{"imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module" src="/static/globe.js"></script>
+<script defer src="/static/app.js"></script>
+<script defer src="/static/history.js"></script>
+</body>
+</html>
