@@ -55,9 +55,11 @@ def main() -> int:
     app = create_app(cfg, tracker)
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
-    url = f"http://{args.host}:{args.port}"
+    # With sign-in on, the browser must use the address Google returns to.
+    url = cfg.base_url if cfg.auth == "google" else f"http://{args.host}:{args.port}"
     print(f"  open   {url}")
     print(f"  data   {cfg.data_dir}")
+    print(f"  auth   {'Google sign-in' if cfg.auth == 'google' else 'local, no sign-in'}")
     if tracker:
         print(f"  live   adsb.lol (primary) · opensky (fallback),"
               f" every {POLL_INTERVAL_S}s")

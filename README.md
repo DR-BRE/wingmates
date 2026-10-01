@@ -26,8 +26,9 @@ Opens `http://127.0.0.1:8817`. Press `ctrl-c` to stop. Needs Python 3.11+.
 .venv/bin/python -m unittest discover -s tests -t .   # offline tests
 ```
 
-There is no sign-in yet: on your own machine every request acts as one local
-user, `@you`. Google sign-in and hosting are the next two steps.
+By default there is no sign-in: on your own machine every request acts as one
+local user, `@you`. To have people sign in with Google, see
+[docs/google-sign-in-setup.md](docs/google-sign-in-setup.md).
 
 ### Settings
 
@@ -36,6 +37,10 @@ user, `@you`. Google sign-in and hosting are the next two steps.
 | `WINGMATES_LIVE` | `1` | `0` turns off the live tracker and hides the Live tab. |
 | `WINGMATES_DEV_USERS` | `0` | `1` adds a box in the header to switch between made-up users, for trying the Social tab. Never enable this on a server others can reach. |
 | `WINGMATES_DATA_DIR` | `~/.wingmates` | Where `flights.db` and `state.json` live. |
+| `WINGMATES_AUTH` | `local` | `google` requires sign-in. Live then defaults to off and dev users are ignored. |
+| `WINGMATES_BASE_URL` | `http://localhost:8817` | The address people use. Google returns sign-ins here, and the app only answers to this host and the local names. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | from `~/.wingmates/google-client.json` | The Google client, when not using the downloaded file. |
+| `SECRET_KEY` | generated, kept in `~/.wingmates/secret_key` | Signs session cookies. |
 
 ## My flights
 
@@ -153,9 +158,8 @@ a new client module and a wider `Position`, not a rewrite.
 
 ## Not built yet
 
-Sign-in and hosting. Until then it runs for one person on one machine, with
-made-up users available for trying the Social tab. Importing from calendar
-events or email confirmations is also not built.
+Hosting. Until then it runs on one machine. Importing from calendar events
+or email confirmations is also not built.
 
 ## Layout
 
@@ -171,9 +175,11 @@ fc/config.py            settings from environment variables
 fc/db.py                SQLite schema and migration
 fc/users.py             user records and username rules
 fc/mates.py             mate requests, pairs, and what a mate may see
+fc/auth.py              Google sign-in
 fc/webapp.py            Flask app: every HTTP route
 web/social.js           Social tab
-requirements.txt        Flask
+web/login.html, welcome.html   sign-in and choose-a-username pages
+requirements.txt        Flask, Authlib, requests
 data/airports.csv       airport table (OurAirports, public domain)
 web/index.html          page: My flights / Live tabs, map and globe
 web/app.js              live tracker UI and the flat map (Leaflet)
@@ -192,6 +198,10 @@ POST /api/poll                       live: force a feed poll now
 GET  /api/nearby?lat=&lon=&dist=     live: aircraft in an area
 GET  /api/aircraft?reg=              live: where is this airframe right now
 
+GET  /auth/login, /auth/callback     Google sign-in            (google mode)
+POST /auth/logout                    sign out                  (google mode)
+POST /api/username {username}        choose a username, once   (google mode)
+POST /api/account/delete {confirm}   delete your account       (google mode)
 GET  /api/me                         the current user and feature flags
 GET  /api/history/export.csv         your flights as CSV
 GET  /api/social                     you, your mates with stats, pending requests
