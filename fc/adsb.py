@@ -24,7 +24,7 @@ from typing import Iterable
 
 from .schema import FlightKey, Position
 
-UA = "flighty-clone/1.0 (personal flight tracker; contact: local user)"
+UA = "wingmates/1.0 (personal flight tracker; contact: local user)"
 TIMEOUT = 12
 RATE_LIMIT_COOLDOWN_S = 300     # a 429 is the feed telling us to stop; listen
 

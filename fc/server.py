@@ -17,7 +17,7 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 class Handler(BaseHTTPRequestHandler):
     tracker: Tracker = None          # injected by serve()
     history: History = None
-    server_version = "flighty-clone"
+    server_version = "wingmates"
 
     def log_message(self, fmt, *args):
         pass                          # the tracker prints what matters

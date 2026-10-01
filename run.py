@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Flighty Clone — a working live flight tracker.
+"""Wingmates — your flight history on a globe, plus a live flight tracker.
 
     python3 run.py                 # start on http://127.0.0.1:8817
     python3 run.py --port 9000
@@ -16,11 +16,13 @@ from fc.server import serve
 from fc.tracker import POLL_INTERVAL_S, Tracker
 
 BANNER = r"""
-   ___ _ _      _     _          ___ _
-  | __| (_)__ _| |_  | |_ _  _  / __| |___ _ _  ___
-  | _|| | / _` | ' \ |  _| || | | (__| / _ \ ' \/ -_)
-  |_| |_|_\__, |_||_| \__|\_, |  \___|_\___/_||_\___|
-          |___/           |__/   live ADS-B flight tracking
+  █   █  ███  █   █   ███   █   █   ███   █████  █████   ████
+  █   █   █   ██  █  █      ██ ██  █   █    █    █      █    
+  █ █ █   █   █ █ █  █  ██  █ █ █  █████    █    ████    ███ 
+  ██ ██   █   █  ██  █   █  █   █  █   █    █    █          █
+  █   █  ███  █   █   ███   █   █  █   █    █    █████  ████ 
+
+  your flights on a globe · live ADS-B tracking
 """
 
 

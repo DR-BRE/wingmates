@@ -1,4 +1,4 @@
-# Flighty Clone — your flight history on a globe, plus a live tracker
+# Wingmates — your flight history on a globe, plus a live tracker
 
 Two things in one app, sharing one map:
 
@@ -12,7 +12,7 @@ The browser loads its map libraries and textures from public CDNs, so it needs
 an internet connection.
 
 ```
-cd ~/flighty-clone
+cd wingmates
 python3 run.py
 ```
 
