@@ -12,6 +12,15 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-plane" viewBox="0 0 24 24"><path d="M21 3 3 10.5l7 2.5 2.5 7L21 3z"/><path d="M10 13 21 3"/></symbol>
+  <symbol id="i-mates" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M18 14c2 .5 3.5 2 4 5"/></symbol>
+  <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 12 18.5 5.5"/></symbol>
+  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="6" r="2.5"/><path d="M7 16.5C10 8 14 14 17 7.5"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3 3 15 0 18c-3-3-3-15 0-18z"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+</svg>
 <header class="bar">
   <div class="brand"><span class="glyph">✈</span> WING<span class="dim">MATES</span></div>
   <div class="status live-only" id="status">
@@ -25,9 +34,9 @@
 <main>
   <aside class="side">
     <div class="tabs" role="tablist">
-      <button role="tab" id="tab-history" class="on">My flights</button>
-      <button role="tab" id="tab-social">Social<span class="badge" id="social-badge" hidden></span></button>
-      <button role="tab" id="tab-live" class="live-only">Live</button>
+      <button role="tab" id="tab-history" class="on"><svg class="ico" aria-hidden="true"><use href="#i-plane"/></svg>My flights</button>
+      <button role="tab" id="tab-social"><svg class="ico" aria-hidden="true"><use href="#i-mates"/></svg>Social<span class="badge" id="social-badge" hidden></span></button>
+      <button role="tab" id="tab-live" class="live-only"><svg class="ico" aria-hidden="true"><use href="#i-radar"/></svg>Live</button>
     </div>
 
     <div id="pane-history">
@@ -56,7 +65,7 @@
         <div class="row actions">
           <button type="submit" id="h-add">Add flight</button>
           <button type="button" id="h-cancel" hidden>Cancel</button>
-          <button type="button" id="h-import">Import CSV</button>
+          <button type="button" id="h-import"><svg class="ico" aria-hidden="true"><use href="#i-upload"/></svg> Import CSV</button>
           <a class="link" href="/api/history/export.csv" download>Export</a>
           <a class="link" href="/api/history/template.csv" download>Template</a>
         </div>

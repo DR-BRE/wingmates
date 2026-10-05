@@ -136,5 +136,40 @@ class TestStylesheet(unittest.TestCase):
                 self.assertNotIn(old, CSS)
 
 
+# Buttons whose text a script replaces with textContent; an icon inside
+# one of these would disappear after the first click.
+REWRITTEN_BUTTONS = ("h-add", "h-cancel", "add-btn", "btn-nearby", "btn-refresh")
+
+
+class TestIcons(unittest.TestCase):
+
+    def test_every_icon_used_is_in_the_sprite(self):
+        index = PAGES["index.html"]
+        defined = set(re.findall(r'<symbol id="(i-[\w-]+)"', index))
+        self.assertEqual(defined, {"i-plane", "i-mates", "i-radar", "i-route",
+                                   "i-pin", "i-globe", "i-upload"})
+        used = set(re.findall(r'href="#(i-[\w-]+)"', index))
+        for js in SCRIPTS.values():
+            used |= set(re.findall(r'href="#(i-[\w-]+)"', js))
+        self.assertEqual(used, defined)
+
+    def test_icons_are_hidden_from_screen_readers(self):
+        for name, text in {**PAGES, **SCRIPTS}.items():
+            for tag in re.findall(r'<svg class="ico"[^>]*>', text):
+                with self.subTest(file=name, tag=tag):
+                    self.assertIn('aria-hidden="true"', tag)
+
+    def test_no_icon_sits_in_a_button_a_script_rewrites(self):
+        index = PAGES["index.html"]
+        for button_id in REWRITTEN_BUTTONS:
+            body = re.search(r'<button[^>]*id="%s"[^>]*>(.*?)</button>' % button_id,
+                             index, re.S).group(1)
+            with self.subTest(button=button_id):
+                self.assertNotIn("<svg", body)
+
+    def test_the_top_three_ranks_get_a_medal(self):
+        self.assertIn("' medal m' + (i + 1)", SCRIPTS["social.js"])
+
+
 if __name__ == "__main__":
     unittest.main()

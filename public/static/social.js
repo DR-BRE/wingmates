@@ -145,7 +145,7 @@ function renderSocial(d) {
     const row = document.createElement('div');
     row.className = 'logrow prow brow' + (p.isMe ? ' me' : '')
                   + (p.id === openMateId ? ' open' : '');
-    row.innerHTML = `<span class="rank">${i + 1}</span>${person(p)}
+    row.innerHTML = `<span class="rank${i < 3 ? ' medal m' + (i + 1) : ''}">${i + 1}</span>${person(p)}
       <span class="ws">${fmt(s.distance_mi)}<small>mi</small></span>
       <span class="sub">${laps(s.distance_mi)}× around the Earth ·
         ${fmt(s.countries)} countries · ${fmt(s.airports)} airports</span>`;

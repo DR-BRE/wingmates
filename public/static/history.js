@@ -154,10 +154,10 @@ function renderHistory(d) {
   historyFlights = d.flights;
   const s = d.stats;
   $('h-stats').innerHTML = `
-    <div><dt>Flights</dt><dd>${fmt(s.flights)}</dd></div>
-    <div><dt>Distance</dt><dd>${fmt(s.distance_mi)}<small>mi</small></dd></div>
-    <div><dt>Airports</dt><dd>${fmt(s.airports)}</dd></div>
-    <div><dt>Countries</dt><dd>${fmt(s.countries)}</dd></div>`;
+    <div><dt><svg class="ico" aria-hidden="true"><use href="#i-plane"/></svg>Flights</dt><dd>${fmt(s.flights)}</dd></div>
+    <div><dt><svg class="ico" aria-hidden="true"><use href="#i-route"/></svg>Distance</dt><dd>${fmt(s.distance_mi)}<small>mi</small></dd></div>
+    <div><dt><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg>Airports</dt><dd>${fmt(s.airports)}</dd></div>
+    <div><dt><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Countries</dt><dd>${fmt(s.countries)}</dd></div>`;
 
   $('h-count').textContent = d.flights.length;
   $('h-empty').style.display = d.flights.length ? 'none' : 'block';
