@@ -130,6 +130,17 @@ class TestStylesheet(unittest.TestCase):
             with self.subTest(cls=cls):
                 self.assertRegex(CSS, r"\.%s\b" % re.escape(cls))
 
+    def test_the_focus_ring_stands_out_from_every_surface(self):
+        ring = re.search(r"focus-visible[^{]*\{\s*outline:3px solid var\((--[\w-]+)\)", CSS).group(1)
+        for theme, t in (("light", self.light), ("dark", self.dark)):
+            for surface in ("--panel", "--bg", "--accent-dim"):
+                with self.subTest(theme=theme, on=surface):
+                    self.assertGreaterEqual(contrast(t[ring], t[surface]), 3)
+
+    def test_a_long_name_shrinks_before_the_wingspan_wraps(self):
+        rule = block(CSS, CSS.index(".brow .pn{"))
+        self.assertRegex(rule, r"flex:\s*1 1 0")
+
     def test_the_old_theme_is_gone(self):
         for old in ("#080c11", "#0e151d", "#17414a", "#15434c", "#4fb6c2"):
             with self.subTest(colour=old):

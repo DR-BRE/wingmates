@@ -103,7 +103,7 @@ button,.gatebtn{min-height:44px;margin:0 0 4px;padding:8px 16px;background:var(-
 button:hover,.gatebtn:hover{filter:brightness(1.07)}
 button:active,.gatebtn:active{transform:translateY(4px);box-shadow:0 0 0 transparent}
 button:focus-visible,.gatebtn:focus-visible,a:focus-visible,summary:focus-visible{
-  outline:3px solid var(--accent-line);outline-offset:2px}
+  outline:3px solid var(--accent);outline-offset:2px}
 button:disabled{opacity:.5;cursor:not-allowed;transform:none;
   box-shadow:0 4px 0 var(--accent-lip)}
 button.quiet,#h-import,#h-cancel{background:var(--panel);color:var(--muted);
@@ -155,7 +155,7 @@ button.danger{background:var(--red-fill);color:var(--on-red);
 .frow.editing{border-color:var(--accent-line);background:var(--accent-dim)}
 /* Icon-only buttons: no fill, no lip. */
 .frow .ed,.frow .x,.card .x,.gpop .gpop-x{min-height:0;margin:0;padding:0 4px;
-  background:none;border:none;box-shadow:none;color:var(--faint);font-size:16px;
+  background:none;border:none;box-shadow:none;color:var(--muted);font-size:16px;
   line-height:1;letter-spacing:0;text-transform:none}
 .frow .ed:active,.frow .x:active,.card .x:active,.gpop .gpop-x:active{transform:none}
 .frow .ed:hover{color:var(--accent-ink)}
@@ -214,6 +214,7 @@ button.danger{background:var(--red-fill);color:var(--on-red);
   display:inline-flex;align-items:center;justify-content:center;
   background:var(--accent-dim);color:var(--accent-ink);font-size:13px;font-weight:900}
 .prow .pn{display:flex;flex-direction:column;min-width:0;line-height:1.3;margin-right:auto}
+.brow .pn{flex:1 1 0}
 .prow .pn b{font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prow .un{font-size:12px;font-weight:600;color:var(--muted);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
