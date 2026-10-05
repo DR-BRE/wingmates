@@ -37,5 +37,104 @@ class TestScriptsFindTheirElements(unittest.TestCase):
                 self.assertEqual(wanted - on_page - MADE_BY_SCRIPT, set())
 
 
+def block(css, start):
+    """The text inside the first pair of braces that opens at or after `start`."""
+    i = css.index("{", start)
+    depth = 0
+    for j in range(i, len(css)):
+        if css[j] == "{":
+            depth += 1
+        elif css[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return css[i + 1:j]
+    raise AssertionError("unbalanced braces")
+
+
+def tokens(text):
+    return dict(re.findall(r"(--[\w-]+)\s*:\s*(#[0-9a-fA-F]{6})\b", text))
+
+
+def luminance(colour):
+    parts = [int(colour[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in parts]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def contrast(a, b):
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+# (text token, background token): every pairing the stylesheet actually uses.
+PAIRS = [
+    ("--ink", "--panel"), ("--ink", "--bg"), ("--ink", "--accent-dim"),
+    ("--muted", "--panel"), ("--muted", "--panel-2"), ("--muted", "--accent-dim"),
+    ("--muted", "--coral-tint"), ("--muted", "--red-tint"),
+    ("--faint", "--panel"), ("--faint", "--panel-2"),
+    ("--on-accent", "--accent"),
+    ("--accent-ink", "--panel"), ("--accent-ink", "--accent-dim"),
+    ("--green-ink", "--green-tint"),
+    ("--on-gold", "--gold"),
+    ("--gold-ink", "--panel"), ("--gold-ink", "--accent-dim"), ("--gold-ink", "--coral-tint"),
+    ("--coral-ink", "--panel"), ("--coral-ink", "--coral-tint"),
+    ("--amber", "--amber-tint"),
+    ("--red", "--panel"), ("--red", "--red-tint"),
+    ("--on-red", "--red-fill"),
+]
+
+# Classes the scripts and pages put on elements; each needs a rule.
+CLASSES = ["logrow", "frow", "prow", "brow", "card", "sel", "emerg", "phase",
+           "metrics", "ev", "loud", "alarm", "toast", "show", "bad", "pill",
+           "hint", "error", "tag", "gdot", "gmark", "gpop", "av", "pn", "un",
+           "st", "rank", "ws", "sub", "h2h", "lead", "acct", "menu", "quiet",
+           "danger", "editing", "on", "badge", "count", "empty", "medal", "ico"]
+
+
+class TestStylesheet(unittest.TestCase):
+
+    def setUp(self):
+        self.light = tokens(block(CSS, CSS.index(":root")))
+        media = block(CSS, CSS.index("@media (prefers-color-scheme:dark)"))
+        self.dark_only = tokens(block(media, media.index(":root")))
+        self.dark = {**self.light, **self.dark_only}
+
+    def test_text_is_readable_on_every_surface_in_both_themes(self):
+        for theme, t in (("light", self.light), ("dark", self.dark)):
+            for fg, bg in PAIRS:
+                with self.subTest(theme=theme, text=fg, on=bg):
+                    self.assertGreaterEqual(contrast(t[fg], t[bg]), 4.5)
+
+    def test_dark_theme_redefines_every_colour_token(self):
+        self.assertEqual(set(self.dark_only), set(self.light))
+
+    def test_the_map_area_uses_the_dark_tokens_in_both_themes(self):
+        on_map = tokens(block(CSS, CSS.index(".mapwrap{")))
+        self.assertEqual(on_map, self.dark_only)
+
+    def test_the_font_has_system_fallbacks(self):
+        sans = re.search(r"--sans\s*:\s*([^;]+);", CSS).group(1)
+        self.assertTrue(sans.startswith('"Nunito"'))
+        self.assertIn("ui-rounded", sans)
+        self.assertIn("-apple-system", sans)
+        self.assertTrue(sans.rstrip().endswith("sans-serif"))
+
+    def test_motion_can_be_turned_off(self):
+        self.assertIn("@media (prefers-reduced-motion:reduce)", CSS)
+
+    def test_the_date_field_follows_the_theme(self):
+        self.assertNotIn("color-scheme:dark", block(CSS, CSS.index("#h-date")))
+
+    def test_every_class_in_use_has_a_rule(self):
+        for cls in CLASSES:
+            with self.subTest(cls=cls):
+                self.assertRegex(CSS, r"\.%s\b" % re.escape(cls))
+
+    def test_the_old_theme_is_gone(self):
+        for old in ("#080c11", "#0e151d", "#17414a", "#15434c", "#4fb6c2"):
+            with self.subTest(colour=old):
+                self.assertNotIn(old, CSS)
+
+
 if __name__ == "__main__":
     unittest.main()
