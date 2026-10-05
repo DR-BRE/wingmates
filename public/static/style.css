@@ -129,7 +129,7 @@ button.danger{background:var(--red-fill);color:var(--on-red);
 .badge[hidden]{display:none}
 
 #hist-form .row + .row,#hist-form details .row{margin-top:8px}
-#h-date{flex:1.5}
+#h-date{flex:1.5;font-size:13px;padding-left:8px;padding-right:8px}
 .more{margin-top:10px}
 .more summary{cursor:pointer;color:var(--accent-ink);font-size:13px;font-weight:800;
   user-select:none}
