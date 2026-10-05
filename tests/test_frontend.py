@@ -149,7 +149,8 @@ class TestStylesheet(unittest.TestCase):
 
 # Buttons whose text a script replaces with textContent; an icon inside
 # one of these would disappear after the first click.
-REWRITTEN_BUTTONS = ("h-add", "h-cancel", "add-btn", "btn-nearby", "btn-refresh")
+REWRITTEN_BUTTONS = ("h-add", "h-cancel", "add-btn", "btn-nearby", "btn-refresh",
+                     "g-add")
 
 
 class TestIcons(unittest.TestCase):
@@ -158,7 +159,7 @@ class TestIcons(unittest.TestCase):
         index = PAGES["index.html"]
         defined = set(re.findall(r'<symbol id="(i-[\w-]+)"', index))
         self.assertEqual(defined, {"i-plane", "i-mates", "i-radar", "i-route",
-                                   "i-pin", "i-globe", "i-upload"})
+                                   "i-pin", "i-globe", "i-upload", "i-mail"})
         used = set(re.findall(r'href="#(i-[\w-]+)"', index))
         for js in SCRIPTS.values():
             used |= set(re.findall(r'href="#(i-[\w-]+)"', js))

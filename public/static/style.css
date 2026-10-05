@@ -340,3 +340,26 @@ body.gate{display:flex;align-items:center;justify-content:center;overflow:auto;
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition:none!important;animation:none!important}
 }
+
+/* ---- flights found in email ---------------------------------------- */
+.proposals{list-style:none;margin:12px 0 0;padding:0;display:flex;
+  flex-direction:column;gap:8px}
+.proposal{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;
+  background:var(--panel);border:2px solid var(--line);border-radius:14px}
+.proposal.on{border-color:var(--accent-line);background:var(--accent-dim)}
+.proposal input[type=checkbox]{width:22px;height:22px;flex:none;margin-top:2px;
+  accent-color:var(--accent);cursor:pointer}
+.proposal .body{min-width:0;flex:1}
+.proposal .route{font-weight:800;font-size:15px;letter-spacing:.01em}
+.proposal .meta{color:var(--muted);font-size:13px;margin-top:2px}
+.proposal .from{color:var(--muted);font-size:12px;margin-top:4px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tagline{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-left:8px;
+  vertical-align:1px}
+.tagline.sure{background:var(--accent-dim);color:var(--accent-ink)}
+.tagline.maybe{background:var(--warn-dim,#fdf0d5);color:var(--warn-ink,#8a5a00)}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]) .tagline.maybe{background:#3a2c12;color:#e8b767}
+}
+:root[data-theme=dark] .tagline.maybe{background:#3a2c12;color:#e8b767}

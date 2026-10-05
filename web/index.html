@@ -19,6 +19,7 @@
   <symbol id="i-route" viewBox="0 0 24 24"><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="6" r="2.5"/><path d="M7 16.5C10 8 14 14 17 7.5"/></symbol>
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.5"/></symbol>
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c3 3 3 15 0 18c-3-3-3-15 0-18z"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></symbol>
   <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
 </svg>
 <header class="bar">
@@ -65,6 +66,7 @@
         <div class="row actions">
           <button type="submit" id="h-add">Add flight</button>
           <button type="button" id="h-cancel" hidden>Cancel</button>
+          <button type="button" id="g-connect"><svg class="ico" aria-hidden="true"><use href="#i-mail"/></svg> <span id="g-connect-label">Find my flights</span></button>
           <button type="button" id="h-import"><svg class="ico" aria-hidden="true"><use href="#i-upload"/></svg> Import CSV</button>
           <a class="link" href="/api/history/export.csv" download>Export</a>
           <a class="link" href="/api/history/template.csv" download>Template</a>
@@ -73,6 +75,18 @@
         <p class="hint" id="h-hint">Two airport codes and a date, that's it.
            For a CSV, dates are YYYY-MM-DD.</p>
       </form>
+
+      <section id="g-panel" hidden>
+        <h2>Flights found in your email</h2>
+        <p class="hint" id="g-summary"></p>
+        <div class="row actions" id="g-bulk">
+          <button type="button" id="g-add" disabled>Add selected</button>
+          <button type="button" class="quiet" id="g-all">Select all</button>
+          <button type="button" class="quiet" id="g-none">Select none</button>
+          <button type="button" class="quiet" id="g-close">Close</button>
+        </div>
+        <ul class="proposals" id="g-list"></ul>
+      </section>
 
       <section>
         <h2>Totals</h2>
@@ -174,5 +188,6 @@
 <script defer src="/static/app.js"></script>
 <script defer src="/static/history.js"></script>
 <script defer src="/static/social.js"></script>
+<script defer src="/static/gmail.js"></script>
 </body>
 </html>
