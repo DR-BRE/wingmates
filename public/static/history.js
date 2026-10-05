@@ -130,7 +130,7 @@ function enterEdit(f) {
 function exitEdit() {
   editingId = null;
   $('hist-form').classList.remove('editing');
-  $('h-label').textContent = 'Add a flight';
+  $('h-label').textContent = 'Log a flight';
   $('h-add').textContent = 'Add flight';
   $('h-cancel').hidden = true;
   $('h-import').hidden = false;
@@ -253,7 +253,7 @@ $('hist-form').addEventListener('submit', async e => {
       exitEdit();
       hint(`Saved ${f.from.iata} → ${f.to.iata}, ${fmt(f.distance_mi, ' mi')}.`);
     } else {
-      hint(`Added ${f.from.iata} → ${f.to.iata}, ${fmt(f.distance_mi, ' mi')}.`);
+      hint(`Logged ${f.from.iata} → ${f.to.iata}, ${fmt(f.distance_mi, ' mi')}. Nice one.`);
       // Set up for the next leg: it most likely starts where this one ended.
       $('h-from').value = f.to.iata;
       for (const id of ['h-to', 'h-flight', 'h-seat', 'h-notes']) $(id).value = '';

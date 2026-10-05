@@ -89,7 +89,7 @@ function renderCard(p) {
                button('Cancel', 'quiet', () => act(`/api/mates/${p.id}/cancel`)));
   } else if (p.relation === 'incoming') {
     row.append(button('Accept', '', () => act(`/api/mates/${p.id}/accept`, {},
-                      `You and @${p.username} are mates.`)));
+                      `You and @${p.username} are mates now.`)));
   } else {
     row.append(button('Add mate', '', () => act('/api/mates/request',
                       { username: p.username })));
@@ -121,7 +121,7 @@ function renderSocial(d) {
     row.innerHTML = person(p);
     row.append(
       button('Accept', '', () => act(`/api/mates/${p.id}/accept`, {},
-             `You and @${p.username} are mates.`)),
+             `You and @${p.username} are mates now.`)),
       button('Decline', 'quiet', () => act(`/api/mates/${p.id}/decline`)));
     reqs.appendChild(row);
   }

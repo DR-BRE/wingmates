@@ -171,5 +171,28 @@ class TestIcons(unittest.TestCase):
         self.assertIn("' medal m' + (i + 1)", SCRIPTS["social.js"])
 
 
+class TestCopy(unittest.TestCase):
+
+    def test_empty_states_invite_the_next_step(self):
+        index = PAGES["index.html"]
+        for line in ("No flights yet. Where to first?",
+                     "No mates yet. Find one by username and see who has flown further.",
+                     "All quiet. Alerts show up here when a flight changes state."):
+            with self.subTest(line=line):
+                self.assertIn(line, index)
+
+    def test_the_form_label_is_the_same_before_and_after_an_edit(self):
+        on_page = re.search(r'id="h-label">([^<]+)<', PAGES["index.html"]).group(1)
+        reset_to = re.findall(r"\$\('h-label'\)\.textContent = '([^']+)'",
+                              SCRIPTS["history.js"])
+        self.assertIn(on_page, reset_to)
+        self.assertEqual(on_page, "Log a flight")
+
+    def test_copy_has_no_exclamation_marks(self):
+        visible = re.sub(r"<script.*?</script>|<[^>]+>", " ",
+                         PAGES["index.html"], flags=re.S)
+        self.assertNotIn("!", visible)
+
+
 if __name__ == "__main__":
     unittest.main()

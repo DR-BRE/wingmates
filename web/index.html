@@ -41,7 +41,7 @@
 
     <div id="pane-history">
       <form class="add" id="hist-form" autocomplete="off">
-        <label for="h-from" id="h-label">Add a flight</label>
+        <label for="h-from" id="h-label">Log a flight</label>
         <div class="row">
           <input id="h-from" list="apt-list" placeholder="From  ATL"
                  spellcheck="false" required aria-label="From airport">
@@ -70,7 +70,7 @@
           <a class="link" href="/api/history/template.csv" download>Template</a>
         </div>
         <input type="file" id="h-file" accept=".csv,text/csv" hidden>
-        <p class="hint" id="h-hint">Airport codes and a date are all you need.
+        <p class="hint" id="h-hint">Two airport codes and a date, that's it.
            For a CSV, dates are YYYY-MM-DD.</p>
       </form>
 
@@ -82,7 +82,7 @@
       <section>
         <h2>Flights <span class="count" id="h-count">0</span></h2>
         <div id="h-list" class="log"></div>
-        <p class="empty" id="h-empty">No flights yet. Add your first one above.</p>
+        <p class="empty" id="h-empty">No flights yet. Where to first?</p>
       </section>
     </div>
 
@@ -106,7 +106,7 @@
       <section>
         <h2>Mates <span class="count" id="mates-count">0</span></h2>
         <div id="board" class="log"></div>
-        <p class="empty" id="mates-empty">No mates yet. Find one by username above.</p>
+        <p class="empty" id="mates-empty">No mates yet. Find one by username and see who has flown further.</p>
       </section>
 
       <section id="h2h" hidden></section>
@@ -126,14 +126,14 @@
     <section>
       <h2>Tracking <span class="count" id="flights-count">0</span></h2>
       <div id="flights" class="cards"></div>
-      <p class="empty" id="flights-empty">Nothing tracked yet. Use “Nearby” on the
-         map to find a live callsign, then track it.</p>
+      <p class="empty" id="flights-empty">Nothing tracked yet. Tap “Nearby” on the
+         map to spot a live callsign, then track it.</p>
     </section>
 
     <section>
       <h2>Alerts</h2>
       <div id="alerts" class="feed"></div>
-      <p class="empty" id="alerts-empty">Alerts appear here as flights change state.</p>
+      <p class="empty" id="alerts-empty">All quiet. Alerts show up here when a flight changes state.</p>
     </section>
 
     <section>
