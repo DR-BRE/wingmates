@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .turso import Turso, TursoConnection
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 LOCAL_USERNAME = "you"
 
 # AUTOINCREMENT so an id is never handed out twice: a session cookie left over
@@ -65,6 +65,15 @@ CREATE TABLE mates (
     CHECK (user_lo < user_hi)
 )"""
 
+_GMAIL_LINKS = """
+CREATE TABLE gmail_links (
+    user_id       INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    refresh_token TEXT NOT NULL,
+    email         TEXT NOT NULL DEFAULT '',
+    connected_at  TEXT NOT NULL,
+    last_scan_at  TEXT
+)"""
+
 _LEGACY_COLUMNS = ("id, date, origin, dest, airline, flight_number, aircraft,"
                    " seat, notes, distance_km, created_at")
 
@@ -105,7 +114,8 @@ def _init_turso(database: Turso) -> None:
     """Create the tables on Turso if they are not there. A Turso database
     starts empty, so there is nothing older to migrate from. One request."""
     connect(database).batch(
-        [_if_missing(ddl).strip() for ddl in (_USERS, _FLIGHTS, _REQUESTS, _MATES)]
+        [_if_missing(ddl).strip()
+         for ddl in (_USERS, _FLIGHTS, _REQUESTS, _MATES, _GMAIL_LINKS)]
         + ["CREATE INDEX IF NOT EXISTS flights_user_date"
            " ON flights (user_id, date)"])
 
@@ -142,7 +152,8 @@ def init(path) -> None:
     already at the current version is left untouched.
 
     Version 0 is either empty or the single-user format (a bare flights
-    table). Version 1 lacks users.session_epoch."""
+    table). Version 1 lacks users.session_epoch. Version 2 lacks
+    gmail_links."""
     if isinstance(path, Turso):
         return _init_turso(path)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -167,9 +178,14 @@ def init(path) -> None:
             version = _version(db)      # another process may have got here first
             if version == 0:
                 _create(db, legacy)
-            elif version == 1:
-                db.execute("ALTER TABLE users ADD COLUMN"
-                           " session_epoch INTEGER NOT NULL DEFAULT 0")
+            else:
+                # Cumulative, not a chain: a version 1 database upgrading
+                # straight to 3 must pick up every step on the way.
+                if version < 2:
+                    db.execute("ALTER TABLE users ADD COLUMN"
+                               " session_epoch INTEGER NOT NULL DEFAULT 0")
+                if version < 3:
+                    db.execute(_GMAIL_LINKS)
             if version < SCHEMA_VERSION:
                 db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             db.commit()
@@ -180,7 +196,7 @@ def init(path) -> None:
 
 
 def _create(db: sqlite3.Connection, legacy: bool) -> None:
-    for ddl in (_USERS, _REQUESTS, _MATES):
+    for ddl in (_USERS, _REQUESTS, _MATES, _GMAIL_LINKS):
         db.execute(ddl)
     if legacy:
         owner = ensure_local_user(db)

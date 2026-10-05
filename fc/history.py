@@ -203,6 +203,19 @@ class UserHistory:
                 " ORDER BY date DESC, id DESC", (self.user_id,)).fetchall()
         return [self._row(r) for r in rows]
 
+    def route_keys(self) -> set[tuple]:
+        """Every (date, origin, dest) already logged.
+
+        Used to keep an import from adding a leg twice. Only three columns are
+        read because the whole point is to answer "have I got this one" without
+        loading a lifetime of flights to find out.
+        """
+        with closing(connect(self.database)) as db:
+            rows = db.execute(
+                "SELECT date, origin, dest FROM flights WHERE user_id = ?",
+                (self.user_id,)).fetchall()
+        return {(r["date"], r["origin"], r["dest"]) for r in rows}
+
     def stats(self, flights: list[dict] | None = None) -> dict:
         flights = self.list() if flights is None else flights
         codes = {f[end]["iata"] for f in flights for end in ("from", "to")}

@@ -21,6 +21,8 @@ from .airports import Airports
 from .auth import GoogleSignIn, persistent_key, safe_next
 from .config import Config
 from .db import readable
+from . import gmail as gmail_mod
+from .gmail import GmailError, GmailLinks
 from .history import OPTIONAL, History, template_csv
 from .mates import Mates
 from .users import Users, normalize_username, validate_username
@@ -246,6 +248,85 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
     def history_delete():
         return jsonify(removed=flights().delete(flight_id(body())))
 
+    # ----------------------------------------------------------- Gmail
+    # Reading someone's mail is the most sensitive thing this app does, so the
+    # rules are narrow and stated once here:
+    #   * the scope is requested separately from sign-in, never bundled;
+    #   * a scan proposes, a human disposes — nothing imports itself;
+    #   * disconnecting revokes at Google, not just locally.
+    gmail_links = GmailLinks(config.database)
+
+    def gmail_access_token() -> str:
+        link = gmail_links.get(g.user["id"])
+        if not link:
+            raise ApiError("Connect Gmail first.", 409)
+        try:
+            return gmail_mod.refresh_access_token(
+                config.google_client_id, config.google_client_secret,
+                link["refresh_token"])
+        except GmailError as error:
+            # The grant is gone; stop pretending we are connected.
+            gmail_links.forget(g.user["id"])
+            raise ApiError(str(error), 409) from error
+
+    @app.get("/api/gmail/status")
+    def gmail_status():
+        status = gmail_links.status(g.user["id"])
+        status["available"] = bool(google and config.google_client_id)
+        return jsonify(status)
+
+    @app.post("/api/gmail/scan")
+    def gmail_scan():
+        if not (google and config.google_client_id):
+            raise ApiError("Gmail import needs Google sign-in to be set up.", 409)
+        token = gmail_access_token()
+        already = flights().route_keys()
+        try:
+            result = gmail_mod.scan(gmail_mod.GmailClient(token),
+                                    already_flown=already)
+        except GmailError as error:
+            raise ApiError(str(error), 502) from error
+        gmail_links.touch_scan(g.user["id"])
+        return jsonify(result)
+
+    @app.post("/api/gmail/import")
+    def gmail_import():
+        chosen = body().get("flights")
+        if not isinstance(chosen, list) or not chosen:
+            raise ApiError("choose at least one flight to add")
+        if len(chosen) > 500:
+            raise ApiError("add at most 500 flights at a time")
+        added, skipped, errors = 0, 0, []
+        log = flights()
+        known = set(log.route_keys())
+        for row in chosen:
+            if not isinstance(row, dict):
+                errors.append("a flight was not an object")
+                continue
+            day = text(row, "date")
+            origin = text(row, "from").upper()
+            dest = text(row, "to").upper()
+            if (day, origin, dest) in known:
+                skipped += 1
+                continue
+            try:
+                log.add(day, origin, dest,
+                        airline=text(row, "airline"),
+                        flight_number=text(row, "flight_number"))
+                known.add((day, origin, dest))
+                added += 1
+            except ValueError as error:
+                errors.append(f"{day} {origin}-{dest}: {error}")
+        return jsonify({"added": added, "skipped": skipped,
+                        "errors": errors[:20]})
+
+    @app.post("/api/gmail/disconnect")
+    def gmail_disconnect():
+        token = gmail_links.forget(g.user["id"])
+        if token:
+            gmail_mod.revoke(token)
+        return jsonify({"connected": False})
+
     @app.post("/api/history/import")
     def history_import():
         text = body().get("csv")
@@ -352,6 +433,40 @@ def create_app(config: Config, tracker=None, airports: Airports | None = None,
             session["epoch"] = users.session_epoch(user["id"])
             session.permanent = True
             return redirect(target)
+
+        @app.get("/auth/gmail/connect")
+        def gmail_connect():
+            if not config.google_client_id:
+                return redirect("/?gmail=unavailable")
+            # A one-shot value tying the callback to this browser, so another
+            # site cannot walk someone through connecting an inbox.
+            state = secrets.token_urlsafe(24)
+            session["gmail_state"] = state
+            return redirect(gmail_mod.authorize_url(
+                config.google_client_id,
+                config.base_url + "/auth/gmail/callback", state))
+
+        @app.get("/auth/gmail/callback")
+        def gmail_callback():
+            expected = session.pop("gmail_state", None)
+            got = request.args.get("state")
+            if not expected or not got or not secrets.compare_digest(expected, got):
+                return redirect("/?gmail=error")
+            if request.args.get("error") or not request.args.get("code"):
+                return redirect("/?gmail=denied")
+            user = current_user()
+            if not user:
+                return redirect("/login")
+            try:
+                token = gmail_mod.exchange_code(
+                    config.google_client_id, config.google_client_secret,
+                    request.args["code"],
+                    config.base_url + "/auth/gmail/callback")
+            except GmailError:
+                return redirect("/?gmail=error")
+            gmail_links.save(user["id"], token["refresh_token"],
+                             user.get("email") or "")
+            return redirect("/?gmail=connected")
 
         @app.post("/auth/logout")
         def auth_logout():

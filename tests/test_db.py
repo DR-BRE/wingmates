@@ -50,7 +50,8 @@ class TestFresh(DbCase):
     def test_creates_the_schema_without_a_backup(self):
         db.init(self.path)
         self.assertEqual(self.tables(),
-                         {"users", "flights", "mate_requests", "mates"})
+                         {"users", "flights", "mate_requests", "mates",
+                          "gmail_links"})
         self.assertFalse(self.backup.exists())
         with closing(db.connect(self.path)) as c:
             self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0],
@@ -166,7 +167,21 @@ class TestUpgradeFromV1(DbCase):
                              ("brett", 0))
             self.assertEqual(
                 c.execute("SELECT COUNT(*) FROM flights").fetchone()[0], 1)
-            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 2)
+            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0],
+                             db.SCHEMA_VERSION)
+
+    def test_a_v1_database_picks_up_every_later_step(self):
+        """A chain of `elif`s would hand a v1 database session_epoch and then
+        skip gmail_links entirely."""
+        self.v1()
+        db.init(self.path)
+        with closing(db.connect(self.path)) as c:
+            self.assertEqual(
+                {r[0] for r in c.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    " AND name NOT LIKE 'sqlite_%'")} & {"gmail_links"},
+                {"gmail_links"})
+            c.execute("SELECT session_epoch FROM users").fetchone()
 
     def test_upgrading_twice_changes_nothing(self):
         self.v1()
