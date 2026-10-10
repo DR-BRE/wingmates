@@ -38,8 +38,8 @@ To put it on the internet for friends, free, see
 
 | Variable | Default | Effect |
 |---|---|---|
-| `WINGMATES_LIVE` | `1` | `0` turns off the live tracker and hides the Live tab. |
-| `WINGMATES_DEV_USERS` | `0` | `1` adds a box in the header to switch between made-up users, for trying the Social tab. Never enable this on a server others can reach. |
+| `WINGMATES_LIVE` | `1` | `0` turns off the live tracker and hides its section of the passport. |
+| `WINGMATES_DEV_USERS` | `0` | `1` adds a box in the header to switch between made-up users, for trying the Mates page. Never enable this on a server others can reach. |
 | `WINGMATES_DATA_DIR` | `~/.wingmates` | Where `flights.db` and `state.json` live. |
 | `WINGMATES_AUTH` | `local` | `google` requires sign-in. Live then defaults to off and dev users are ignored. |
 | `WINGMATES_BASE_URL` | `http://localhost:8817` | The address people use. Google returns sign-ins here, and the app only answers to this host and the local names. |
@@ -187,8 +187,9 @@ fc/hosted.py, wsgi.py   the app as a hosted server runs it (gunicorn)
 Dockerfile, render.yaml the container and the Render service
 web/                    HTML pages: the app, sign-in, choose-a-username
 public/static/app.js    live tracker UI and the flat map (Leaflet)
-public/static/history.js   My flights UI: form, list, edit, route drawing
-public/static/social.js    Social tab
+public/static/history.js   Flights page: form, list, edit, route drawing
+public/static/social.js    Mates page
+public/static/passport.js  the passport book: page turns, stamps, the travel record
 public/static/globe.js  3D globe (three.js), loaded as an ES module
 public/static/style.css styles
 wsgi.py                 entry point for Vercel

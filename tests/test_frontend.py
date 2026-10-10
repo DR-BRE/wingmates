@@ -8,7 +8,7 @@ CSS = (ROOT / "public/static/style.css").read_text()
 PAGES = {name: (ROOT / "web" / name).read_text()
          for name in ("index.html", "login.html", "welcome.html")}
 SCRIPTS = {name: (ROOT / "public/static" / name).read_text()
-           for name in ("app.js", "history.js", "social.js")}
+           for name in ("app.js", "history.js", "social.js", "passport.js")}
 
 # Ids that app.js creates itself (the account menu and the dev-user form).
 MADE_BY_SCRIPT = {"acct-out", "acct-del", "del-form", "del-confirm",
@@ -88,7 +88,11 @@ CLASSES = ["logrow", "frow", "prow", "brow", "card", "sel", "emerg", "phase",
            "metrics", "ev", "loud", "alarm", "toast", "show", "bad", "pill",
            "hint", "error", "tag", "gdot", "gmark", "gpop", "av", "pn", "un",
            "st", "rank", "ws", "sub", "h2h", "lead", "acct", "menu", "quiet",
-           "danger", "editing", "on", "badge", "count", "empty", "medal", "ico"]
+           "danger", "editing", "on", "badge", "count", "empty", "medal", "ico",
+           "vp-open", "vp-backdrop", "vp-stage", "vp-book", "vp-page", "vp-static",
+           "vp-left", "vp-right", "vp-leaf", "vp-face", "vp-front", "vp-back",
+           "vp-grip", "vp-shade", "vp-tabs", "vp-close", "vp-stamps", "vp-stamp",
+           "vp-spine"]
 
 
 class TestStylesheet(unittest.TestCase):
@@ -188,7 +192,9 @@ class TestCopy(unittest.TestCase):
         index = PAGES["index.html"]
         for line in ("No flights yet. Where to first?",
                      "No mates yet. Find one by username and see who has flown further.",
-                     "All quiet. Alerts show up here when a flight changes state."):
+                     "All quiet. Alerts show up here when a flight changes state.",
+                     "No stamps yet. Log a flight to start collecting them.",
+                     "Nothing recorded yet. Your first flight will show up here."):
             with self.subTest(line=line):
                 self.assertIn(line, index)
 
@@ -203,6 +209,71 @@ class TestCopy(unittest.TestCase):
         visible = re.sub(r"<script.*?</script>|<[^>]+>", " ",
                          PAGES["index.html"], flags=re.S)
         self.assertNotIn("!", visible)
+
+
+# The six passport pages, grouped by which spread shows them.
+PASSPORT_SPREADS = [("vp-tab-0", ["vp-p1", "vp-p2"]),
+                     ("vp-tab-1", ["vp-p3", "vp-p4"]),
+                     ("vp-tab-2", ["vp-p5", "vp-p6"])]
+
+
+class TestPassport(unittest.TestCase):
+    """The tab row that replaced the old sidebar tabs is a real tablist,
+    every page it controls exists, and the book keeps its own fixed palette
+    the way .mapwrap keeps its own fixed dark palette."""
+
+    def setUp(self):
+        self.index = PAGES["index.html"]
+
+    def test_the_tablist_has_one_tab_per_spread_with_aria_wiring(self):
+        self.assertIn('role="tablist"', self.index)
+        for tab_id, pages in PASSPORT_SPREADS:
+            with self.subTest(tab=tab_id):
+                m = re.search(r'<button role="tab" id="%s"[^>]*>' % re.escape(tab_id),
+                              self.index)
+                self.assertIsNotNone(m, f"{tab_id} is missing")
+                tag = m.group(0)
+                self.assertIn('aria-selected="', tag)
+                self.assertIn('aria-controls="%s"' % " ".join(pages), tag)
+
+    def test_every_passport_page_is_controlled_by_exactly_one_tab(self):
+        controlled = re.findall(r'aria-controls="([^"]+)"', self.index)
+        all_pages = [p for group in controlled for p in group.split()]
+        expected = [p for _, pages in PASSPORT_SPREADS for p in pages]
+        self.assertEqual(sorted(all_pages), sorted(expected))
+        for page_id in expected:
+            with self.subTest(page=page_id):
+                self.assertIn('id="%s"' % page_id, self.index)
+
+    def test_opening_and_closing_do_not_need_a_mouse(self):
+        js = SCRIPTS["passport.js"]
+        self.assertIn("Escape", js)
+        self.assertIn("ArrowRight", js)
+        self.assertIn("ArrowLeft", js)
+
+    def test_dragging_is_off_when_motion_is_reduced(self):
+        self.assertIn("prefers-reduced-motion", SCRIPTS["passport.js"])
+
+    def test_the_passport_keeps_its_own_fixed_palette(self):
+        # Mirrors TestStylesheet's readability check, but for .vp-stage's
+        # scoped tokens — the same "fixed regardless of theme" technique
+        # .mapwrap uses, applied to the passport's parchment pages.
+        block_text = block(CSS, CSS.index(".vp-stage{"))
+        vp = tokens(block_text)
+        for fg, bg in PAIRS:
+            if fg not in vp or bg not in vp:
+                continue
+            with self.subTest(text=fg, on=bg):
+                self.assertGreaterEqual(contrast(vp[fg], vp[bg]), 4.5)
+        # The override must cover every theme token a reused component
+        # (stats, rows, inputs, buttons) might draw on — everything except
+        # --bg (nothing in the book uses it) and the passport's own
+        # always-fixed --vp-* identity tokens, which aren't theme tokens.
+        want = {t for t in self.light_tokens() if t != "--bg" and not t.startswith("--vp-")}
+        self.assertEqual(set(vp), want)
+
+    def light_tokens(self):
+        return tokens(block(CSS, CSS.index(":root")))
 
 
 if __name__ == "__main__":

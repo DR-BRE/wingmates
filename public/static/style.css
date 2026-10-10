@@ -16,6 +16,12 @@
   --shadow:0 8px 24px rgba(0,0,0,.12);
   --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
   --sans:"Nunito",ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  /* The passport is a physical object, not a themed surface: its leather
+     cover and ink stamps stay the same colour in light and dark mode. */
+  --vp-cover:#1b2f4d; --vp-cover-ink:#f3ecd9; --vp-cover-muted:#c9b98a;
+  --vp-backdrop:rgba(10,14,20,.72);
+  --vp-stamp-plum:#6a3fa0; --vp-stamp-teal:#1f6f6b; --vp-stamp-brick:#a33b2e;
+  --vp-stamp-forest:#3c6e37; --vp-stamp-navy:#2a3e66;
 }
 @media (prefers-color-scheme:dark){
   :root{
@@ -30,6 +36,10 @@
     --red:#ff6b63; --red-fill:#ff6b63; --red-lip:#d8443c; --on-red:#2b0704;
     --red-tint:#3d1c1b; --red-line:#7a3430;
     --shadow:0 8px 24px rgba(0,0,0,.45);
+    --vp-cover:#1b2f4d; --vp-cover-ink:#f3ecd9; --vp-cover-muted:#c9b98a;
+    --vp-backdrop:rgba(10,14,20,.72);
+    --vp-stamp-plum:#6a3fa0; --vp-stamp-teal:#1f6f6b; --vp-stamp-brick:#a33b2e;
+    --vp-stamp-forest:#3c6e37; --vp-stamp-navy:#2a3e66;
   }
 }
 .mapwrap{
@@ -45,6 +55,10 @@
   --red:#ff6b63; --red-fill:#ff6b63; --red-lip:#d8443c; --on-red:#2b0704;
   --red-tint:#3d1c1b; --red-line:#7a3430;
   --shadow:0 8px 24px rgba(0,0,0,.45);
+  --vp-cover:#1b2f4d; --vp-cover-ink:#f3ecd9; --vp-cover-muted:#c9b98a;
+  --vp-backdrop:rgba(10,14,20,.72);
+  --vp-stamp-plum:#6a3fa0; --vp-stamp-teal:#1f6f6b; --vp-stamp-brick:#a33b2e;
+  --vp-stamp-forest:#3c6e37; --vp-stamp-navy:#2a3e66;
   color:var(--ink);
 }
 
@@ -75,15 +89,14 @@ body.no-live .live-only{display:none}
   border:2px solid var(--accent-line);white-space:nowrap}
 .pill.quiet{background:var(--panel-2);color:var(--muted);border-color:var(--line)}
 .pill.bad{background:var(--red-tint);color:var(--red);border-color:var(--red-line)}
+.vp-open{display:flex;align-items:center;gap:8px;min-height:40px;padding:6px 14px}
 
-/* ------------------------------------------------------------- sidebar */
+/* ------------------------------------------------------------- layout */
 main{display:flex;height:calc(100vh - 60px);background:var(--bg)}
-.side{width:390px;flex:none;background:var(--panel);border-right:2px solid var(--line);
-  overflow-y:auto;padding:16px}
-.side section{margin-top:26px}
-.side h2,label{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+.vp-page section{margin-top:26px}
+.vp-page h2,label{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
   color:var(--muted)}
-.side h2{margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.vp-page h2{margin:0 0 10px;display:flex;align-items:center;gap:8px}
 label{display:block;margin-bottom:8px}
 .count{background:var(--panel-2);border:2px solid var(--line);border-radius:999px;
   padding:0 8px;color:var(--muted);font-size:11px;letter-spacing:0}
@@ -115,11 +128,11 @@ button.danger{background:var(--red-fill);color:var(--on-red);
 .hint.error{color:var(--red);font-weight:700}
 .empty{color:var(--muted);font-size:14px;margin:0}
 
-.tabs{display:flex;gap:8px;margin-bottom:20px}
-.tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+.vp-tabs{display:flex;gap:8px}
+.vp-tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
   padding:8px 6px;background:var(--panel);color:var(--muted);border-color:var(--line);
   box-shadow:0 4px 0 var(--lip)}
-.tabs button.on{background:var(--accent-dim);color:var(--accent-ink);
+.vp-tabs button[aria-selected="true"]{background:var(--accent-dim);color:var(--accent-ink);
   border-color:var(--accent-line);box-shadow:0 4px 0 var(--accent-line);
   animation:pop .15s ease-out}
 @keyframes pop{from{transform:scale(.96)}to{transform:scale(1)}}
@@ -185,6 +198,8 @@ button.danger{background:var(--red-fill);color:var(--on-red);
 .metrics dd{margin:2px 0 0;font-size:15px;font-weight:800}
 
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:0}
+#vp-record{grid-template-columns:1fr}
+#vp-record dd{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
 .stats div{background:var(--panel);border:2px solid var(--line);border-radius:16px;
   padding:12px 14px;min-width:0}
 .stats dt{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;
@@ -195,6 +210,8 @@ button.danger{background:var(--red-fill);color:var(--on-red);
 .stats div:nth-child(2) .ico{color:var(--gold-ink)}
 .stats div:nth-child(3) .ico{color:var(--green-ink)}
 .stats div:nth-child(4) .ico{color:var(--coral-ink)}
+#h-stat-countries{cursor:pointer}
+#h-stat-countries:hover{border-color:var(--lip)}
 
 .feed{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto}
 .ev{display:flex;gap:10px;padding:10px 12px;background:var(--panel);
@@ -318,6 +335,86 @@ table.h2h td:last-child.lead{color:var(--coral-ink)}
 .acct .menu form[hidden]{display:none}
 .acct .menu input{width:100%;flex:none}
 
+/* ------------------------------------------------------------ passport */
+.vp-backdrop{position:fixed;inset:0;z-index:940;background:var(--vp-backdrop);
+  opacity:0;transition:opacity .3s ease}
+.vp-backdrop.show{opacity:1}
+.vp-backdrop[hidden]{display:none}
+/* The passport's pages keep one fixed parchment palette in both themes —
+   the same "always this colour" technique .mapwrap uses for the dark map,
+   applied here so every reused component (stats, rows, inputs, buttons)
+   reads correctly on cream paper without a single component-level change. */
+.vp-stage{
+  position:fixed;inset:0;z-index:950;display:flex;align-items:center;
+  justify-content:center;padding:24px;opacity:0;transform:scale(.96);
+  transition:opacity .3s ease,transform .3s ease;pointer-events:none;
+  --panel:#f6f1e3; --panel-2:#efe8d4; --line:#ddd3b8; --lip:#cdbf99;
+  --ink:#3a3426; --muted:#6b6248; --faint:#6e6440;
+  --accent:#6a3fa0; --accent-lip:#52316f; --accent-dim:#ece3f5; --accent-line:#b79bd6;
+  --accent-ink:#5b3689; --on-accent:#ffffff;
+  --green-ink:#3c6e37; --green-tint:#e4efd9; --green-line:#9cc08f;
+  --gold:#c9a24b; --on-gold:#3a2c08; --gold-ink:#5c4300; --gold-tint:#f3e6c2;
+  --coral:#a33b2e; --coral-ink:#8a2f24; --coral-tint:#f3ddd6;
+  --amber:#8a5a00; --amber-tint:#f3e3c2; --amber-line:#d8b876;
+  --red:#a33b2e; --red-fill:#a33b2e; --red-lip:#7e2d22; --on-red:#ffffff;
+  --red-tint:#f3ddd6; --red-line:#d4a89e;
+  --shadow:0 10px 30px rgba(20,14,4,.35);
+}
+.vp-stage.show{opacity:1;transform:scale(1);pointer-events:auto}
+.vp-stage[hidden]{display:none}
+.vp-close{position:absolute;top:18px;right:18px;z-index:960;min-height:0;margin:0;
+  padding:4px 12px;background:var(--vp-cover);color:var(--vp-cover-ink);
+  border:2px solid var(--vp-cover-muted);box-shadow:none;font-size:22px;line-height:1}
+.vp-close:hover{filter:brightness(1.2)}
+
+.vp-book{position:relative;width:min(960px,92vw);height:min(640px,82vh);
+  perspective:2400px;margin-bottom:68px}
+.vp-page{position:absolute;top:0;height:100%;width:50%;overflow-y:auto;
+  padding:26px 28px;background:var(--panel);color:var(--ink);font-family:var(--sans)}
+.vp-static.vp-left{left:0;border-radius:18px 0 0 18px;box-shadow:var(--shadow)}
+.vp-static.vp-right{left:50%;border-radius:0 18px 18px 0;box-shadow:var(--shadow);z-index:0}
+.vp-leaf{position:absolute;top:0;left:50%;width:50%;height:100%;
+  transform-style:preserve-3d;transform-origin:left center;
+  transform:rotateY(var(--vp-angle,0deg));z-index:var(--vp-z,2);
+  box-shadow:var(--shadow)}
+.vp-leaf:not(.dragging){transition:transform .45s cubic-bezier(.4,0,.2,1)}
+.vp-face{position:absolute;inset:0;width:100%;height:100%;backface-visibility:hidden;
+  overflow-y:auto;padding:26px 28px;background:var(--panel);color:var(--ink);
+  font-family:var(--sans)}
+.vp-face.vp-front{border-radius:0 18px 18px 0}
+.vp-face.vp-back{border-radius:18px 0 0 18px;transform:rotateY(180deg)}
+.vp-spine{position:absolute;left:50%;top:0;bottom:0;width:4px;margin-left:-2px;
+  z-index:1;background:linear-gradient(90deg,rgba(0,0,0,.18),rgba(0,0,0,.05) 40%,
+  rgba(0,0,0,.05) 60%,rgba(0,0,0,.18));pointer-events:none}
+.vp-grip{position:absolute;top:0;bottom:0;right:0;width:30px;cursor:grab;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.06));touch-action:none}
+.vp-grip:active{cursor:grabbing}
+.vp-grip::after{content:"";position:absolute;right:0;bottom:0;width:0;height:0;
+  border-style:solid;border-width:0 0 22px 22px;
+  border-color:transparent transparent var(--vp-cover-muted) transparent;opacity:.65}
+.vp-shade{position:absolute;inset:0;background:linear-gradient(90deg,
+  rgba(0,0,0,.35),transparent 55%);opacity:0;pointer-events:none}
+.vp-leaf:not(.dragging) .vp-shade{transition:opacity .45s ease}
+
+.vp-tabs{display:flex;gap:10px;width:min(960px,92vw);position:absolute;
+  bottom:24px;left:50%;transform:translateX(-50%)}
+.vp-tabs button{background:var(--vp-cover);color:var(--vp-cover-muted);
+  border-color:var(--vp-cover);box-shadow:0 4px 0 #0f1d31}
+.vp-tabs button[aria-selected="true"]{color:var(--vp-cover-ink);
+  border-color:var(--vp-cover-ink)}
+
+.vp-stamps{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
+  gap:12px}
+.vp-stamp{position:relative;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;aspect-ratio:1;border-radius:50%;
+  border:3px solid var(--stamp-ink,var(--vp-stamp-navy));color:var(--stamp-ink,var(--vp-stamp-navy));
+  transform:rotate(var(--stamp-tilt,0deg));padding:6px;text-align:center}
+.vp-stamp::before{content:"";position:absolute;inset:4px;border-radius:50%;
+  border:1px solid currentColor;opacity:.5}
+.vp-stamp b{font-size:19px;font-weight:900;letter-spacing:.02em}
+.vp-stamp span{font-size:10px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.04em;line-height:1.2}
+
 /* ---------------------------------------- sign-in and username pages */
 body.gate{display:flex;align-items:center;justify-content:center;overflow:auto;
   padding:16px}
@@ -334,8 +431,25 @@ body.gate{display:flex;align-items:center;justify-content:center;overflow:auto;
   body{overflow:auto}
   .bar{height:auto;min-height:60px;padding:8px 12px;row-gap:6px}
   main{flex-direction:column;height:auto;overflow:visible}
-  .side{width:100%;border-right:none;border-bottom:2px solid var(--line);overflow:visible}
   .mapwrap{height:60vh;flex:none}
+  .vp-stage{padding:0}
+  .vp-book{width:100%;height:100%;max-height:none;perspective:none}
+  .vp-page,.vp-leaf,.vp-face{position:static;width:100%;height:auto;
+    border-radius:0!important;box-shadow:none;transform:none!important;
+    transition:none!important}
+  .vp-leaf{display:contents}
+  .vp-face.vp-back,.vp-static.vp-right,.vp-grip,.vp-spine,.vp-shade{display:none}
+  .vp-leaf .vp-face.vp-front,#vp-p1{display:none}
+  .vp-stage[data-spread="0"] #vp-p1,
+  .vp-stage[data-spread="0"] #vp-leaf1 .vp-face.vp-front{display:block}
+  .vp-stage[data-spread="1"] #vp-leaf1 .vp-face.vp-back,
+  .vp-stage[data-spread="1"] #vp-leaf2 .vp-face.vp-front{display:block}
+  .vp-stage[data-spread="2"] #vp-leaf2 .vp-face.vp-back,
+  .vp-stage[data-spread="2"] #vp-p6{display:block;position:static;width:100%}
+  .vp-book{overflow-y:auto;padding:64px 20px 100px}
+  .vp-tabs{position:fixed;left:0;right:0;bottom:0;width:auto;transform:none;
+    background:var(--panel);padding:10px 12px;border-top:2px solid var(--line);
+    margin:0}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition:none!important;animation:none!important}

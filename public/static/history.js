@@ -4,17 +4,8 @@
 
 let historyFlights = [];
 
-// -------------------------------------------------------------------- tabs
-const TABS = ['history', 'social', 'live'].filter(t => $('tab-' + t));
-
-function showTab(name) {
-  for (const t of TABS) {
-    $('pane-' + t).hidden = t !== name;
-    $('tab-' + t).classList.toggle('on', t === name);
-  }
-  document.dispatchEvent(new CustomEvent('tab', { detail: name }));
-}
-for (const t of TABS) $('tab-' + t).addEventListener('click', () => showTab(t));
+// Page navigation now lives in passport.js, which fires the same 'tab'
+// event the old tab buttons fired.
 
 // ---------------------------------------------------------------- flat map
 const RAD = Math.PI / 180;
@@ -157,7 +148,7 @@ function renderHistory(d) {
     <div><dt><svg class="ico" aria-hidden="true"><use href="#i-plane"/></svg>Flights</dt><dd>${fmt(s.flights)}</dd></div>
     <div><dt><svg class="ico" aria-hidden="true"><use href="#i-route"/></svg>Distance</dt><dd>${fmt(s.distance_mi)}<small>mi</small></dd></div>
     <div><dt><svg class="ico" aria-hidden="true"><use href="#i-pin"/></svg>Airports</dt><dd>${fmt(s.airports)}</dd></div>
-    <div><dt><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Countries</dt><dd>${fmt(s.countries)}</dd></div>`;
+    <div id="h-stat-countries"><dt><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Countries</dt><dd>${fmt(s.countries)}</dd></div>`;
 
   $('h-count').textContent = d.flights.length;
   $('h-empty').style.display = d.flights.length ? 'none' : 'block';
@@ -201,6 +192,7 @@ function renderHistory(d) {
   }
   markEditing();
   drawRoutes();
+  document.dispatchEvent(new CustomEvent('flights', { detail: d }));
 }
 
 async function loadHistory() {

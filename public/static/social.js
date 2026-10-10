@@ -110,6 +110,11 @@ function renderSocial(d) {
   const badge = $('social-badge');
   badge.hidden = d.incoming.length === 0;
   badge.textContent = d.incoming.length;
+  // Mirrored onto the header's closed-book trigger, so a request is visible
+  // without opening the passport.
+  const pbadge = $('passport-badge');
+  pbadge.hidden = d.incoming.length === 0;
+  pbadge.textContent = d.incoming.length;
 
   const reqs = $('req-list');
   reqs.innerHTML = '';

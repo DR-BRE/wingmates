@@ -23,6 +23,10 @@
 </svg>
 <header class="bar">
   <div class="brand"><span class="glyph">✈</span> WING<span class="dim">MATES</span></div>
+  <button class="vp-open" id="vp-open">
+    <svg class="ico" aria-hidden="true"><use href="#i-plane"/></svg>
+    Passport<span class="badge" id="passport-badge" hidden></span>
+  </button>
   <div class="status live-only" id="status">
     <span class="pill" id="pill-source">connecting…</span>
     <span class="pill quiet" id="pill-tracked">0 tracked</span>
@@ -32,14 +36,32 @@
 </header>
 
 <main>
-  <aside class="side">
-    <div class="tabs" role="tablist">
-      <button role="tab" id="tab-history" class="on"><svg class="ico" aria-hidden="true"><use href="#i-plane"/></svg>My flights</button>
-      <button role="tab" id="tab-social"><svg class="ico" aria-hidden="true"><use href="#i-mates"/></svg>Social<span class="badge" id="social-badge" hidden></span></button>
-      <button role="tab" id="tab-live" class="live-only"><svg class="ico" aria-hidden="true"><use href="#i-radar"/></svg>Live</button>
+  <div class="mapwrap">
+    <div id="map"></div>
+    <div id="globe" hidden></div>
+    <div class="maptools">
+      <div class="viewtoggle" id="viewtoggle" hidden>
+        <button id="btn-globe" title="3D globe">Globe</button>
+        <button id="btn-map" title="Flat map, better for close-up">Map</button>
+      </div>
+      <button id="btn-nearby" class="live-only" title="Show aircraft around the map centre">Nearby</button>
+      <button id="btn-clear" class="live-only" title="Hide nearby aircraft">Clear</button>
+      <button id="btn-refresh" class="live-only" title="Poll the feed now">Poll now</button>
+      <form id="reg-form" class="reg live-only">
+        <input id="reg" placeholder="Where's N123AB?" spellcheck="false">
+        <button type="submit">Find</button>
+      </form>
     </div>
+    <div class="toast" id="toast"></div>
+  </div>
+</main>
 
-    <div id="pane-history">
+<div class="vp-backdrop" id="vp-backdrop" hidden></div>
+<section class="vp-stage" id="vp-stage" aria-label="Your passport" hidden>
+  <button class="vp-close" id="vp-close" title="Close passport" aria-label="Close passport">×</button>
+
+  <div class="vp-book" id="vp-book">
+    <div class="vp-page vp-static vp-left" id="vp-p1">
       <form class="add" id="hist-form" autocomplete="off">
         <label for="h-from" id="h-label">Log a flight</label>
         <div class="row">
@@ -74,94 +96,110 @@
            For a CSV, dates are YYYY-MM-DD.</p>
       </form>
 
-      <section>
-        <h2>Totals</h2>
-        <dl class="stats" id="h-stats"></dl>
-      </section>
-
-      <section>
-        <h2>Flights <span class="count" id="h-count">0</span></h2>
-        <div id="h-list" class="log"></div>
-        <p class="empty" id="h-empty">No flights yet. Where to first?</p>
-      </section>
-    </div>
-
-    <div id="pane-social" hidden>
-      <form class="add" id="find-form" autocomplete="off">
-        <label for="find-user">Find a mate</label>
+      <form class="add live-only" id="add-form" autocomplete="off">
+        <label for="cs">Track a flight</label>
         <div class="row">
-          <input id="find-user" placeholder="@username" spellcheck="false"
-                 autocapitalize="none" aria-label="Username">
-          <button type="submit" id="find-btn">Find</button>
+          <input id="cs" name="cs" placeholder="e.g. DAL983, UAL1, BAW117" spellcheck="false">
+          <button type="submit" id="add-btn">Track</button>
         </div>
-        <p class="hint" id="find-hint">Type their exact username.</p>
+        <p class="hint" id="add-hint">ADS-B callsign, not the marketing number.
+           The aircraft must be powered on and in receiver coverage.</p>
       </form>
-      <div id="find-card" class="log"></div>
 
-      <section id="req-section" hidden>
-        <h2>Requests <span class="count" id="req-count">0</span></h2>
-        <div id="req-list" class="log"></div>
+      <section class="live-only">
+        <h2><svg class="ico" aria-hidden="true"><use href="#i-radar"/></svg>Tracking <span class="count" id="flights-count">0</span></h2>
+        <div id="flights" class="cards"></div>
+        <p class="empty" id="flights-empty">Nothing tracked yet. Tap “Nearby” on the
+           map to spot a live callsign, then track it.</p>
       </section>
 
+      <section class="live-only">
+        <h2>Alerts</h2>
+        <div id="alerts" class="feed"></div>
+        <p class="empty" id="alerts-empty">All quiet. Alerts show up here when a flight changes state.</p>
+      </section>
+
+      <section class="live-only">
+        <h2>Flight log <span class="count" id="log-count">0</span></h2>
+        <div id="log" class="log"></div>
+      </section>
+    </div>
+
+    <div class="vp-leaf" id="vp-leaf1">
+      <div class="vp-page vp-face vp-front" id="vp-p2">
+        <section>
+          <h2>Totals</h2>
+          <dl class="stats" id="h-stats"></dl>
+        </section>
+
+        <section>
+          <h2>Flights <span class="count" id="h-count">0</span></h2>
+          <div id="h-list" class="log"></div>
+          <p class="empty" id="h-empty">No flights yet. Where to first?</p>
+        </section>
+      </div>
+      <div class="vp-page vp-face vp-back" id="vp-p3">
+        <form class="add" id="find-form" autocomplete="off">
+          <label for="find-user">Find a mate</label>
+          <div class="row">
+            <input id="find-user" placeholder="@username" spellcheck="false"
+                   autocapitalize="none" aria-label="Username">
+            <button type="submit" id="find-btn">Find</button>
+          </div>
+          <p class="hint" id="find-hint">Type their exact username.</p>
+        </form>
+        <div id="find-card" class="log"></div>
+
+        <section id="req-section" hidden>
+          <h2>Requests <span class="count" id="req-count">0</span></h2>
+          <div id="req-list" class="log"></div>
+        </section>
+      </div>
+      <span class="vp-shade" aria-hidden="true"></span>
+      <span class="vp-grip" aria-hidden="true"></span>
+    </div>
+
+    <div class="vp-leaf" id="vp-leaf2">
+      <div class="vp-page vp-face vp-front" id="vp-p4">
+        <section>
+          <h2>Mates <span class="count" id="mates-count">0</span></h2>
+          <div id="board" class="log"></div>
+          <p class="empty" id="mates-empty">No mates yet. Find one by username and see who has flown further.</p>
+        </section>
+
+        <section id="h2h" hidden></section>
+      </div>
+      <div class="vp-page vp-face vp-back" id="vp-p5">
+        <section>
+          <h2><svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Stamps <span class="count" id="vp-stamps-count">0</span></h2>
+          <div id="vp-stamps" class="vp-stamps"></div>
+          <p class="empty" id="vp-stamps-empty">No stamps yet. Log a flight to start collecting them.</p>
+        </section>
+      </div>
+      <span class="vp-shade" aria-hidden="true"></span>
+      <span class="vp-grip" aria-hidden="true"></span>
+    </div>
+
+    <div class="vp-page vp-static vp-right" id="vp-p6">
       <section>
-        <h2>Mates <span class="count" id="mates-count">0</span></h2>
-        <div id="board" class="log"></div>
-        <p class="empty" id="mates-empty">No mates yet. Find one by username and see who has flown further.</p>
+        <h2>Travel record</h2>
+        <dl class="stats" id="vp-record"></dl>
+        <p class="empty" id="vp-record-empty">Nothing recorded yet. Your first flight will show up here.</p>
       </section>
-
-      <section id="h2h" hidden></section>
     </div>
 
-    <div id="pane-live" hidden>
-    <form class="add" id="add-form" autocomplete="off">
-      <label for="cs">Track a flight</label>
-      <div class="row">
-        <input id="cs" name="cs" placeholder="e.g. DAL983, UAL1, BAW117" spellcheck="false">
-        <button type="submit" id="add-btn">Track</button>
-      </div>
-      <p class="hint" id="add-hint">ADS-B callsign, not the marketing number.
-         The aircraft must be powered on and in receiver coverage.</p>
-    </form>
-
-    <section>
-      <h2>Tracking <span class="count" id="flights-count">0</span></h2>
-      <div id="flights" class="cards"></div>
-      <p class="empty" id="flights-empty">Nothing tracked yet. Tap “Nearby” on the
-         map to spot a live callsign, then track it.</p>
-    </section>
-
-    <section>
-      <h2>Alerts</h2>
-      <div id="alerts" class="feed"></div>
-      <p class="empty" id="alerts-empty">All quiet. Alerts show up here when a flight changes state.</p>
-    </section>
-
-    <section>
-      <h2>Flight log <span class="count" id="log-count">0</span></h2>
-      <div id="log" class="log"></div>
-    </section>
-    </div>
-  </aside>
-
-  <div class="mapwrap">
-    <div id="map"></div>
-    <div id="globe" hidden></div>
-    <div class="maptools">
-      <div class="viewtoggle" id="viewtoggle" hidden>
-        <button id="btn-globe" title="3D globe">Globe</button>
-        <button id="btn-map" title="Flat map, better for close-up">Map</button>
-      </div>
-      <button id="btn-nearby" class="live-only" title="Show aircraft around the map centre">Nearby</button>
-      <button id="btn-clear" class="live-only" title="Hide nearby aircraft">Clear</button>
-      <button id="btn-refresh" class="live-only" title="Poll the feed now">Poll now</button>
-      <form id="reg-form" class="reg live-only">
-        <input id="reg" placeholder="Where's N123AB?" spellcheck="false">
-        <button type="submit">Find</button>
-      </form>
-    </div>
-    <div class="toast" id="toast"></div>
+    <span class="vp-spine" aria-hidden="true"></span>
   </div>
-</main>
+
+  <div class="vp-tabs" role="tablist" aria-label="Passport pages">
+    <button role="tab" id="vp-tab-0" aria-selected="true" aria-controls="vp-p1 vp-p2">
+      <svg class="ico" aria-hidden="true"><use href="#i-plane"/></svg>Flights</button>
+    <button role="tab" id="vp-tab-1" aria-selected="false" aria-controls="vp-p3 vp-p4">
+      <svg class="ico" aria-hidden="true"><use href="#i-mates"/></svg>Mates<span class="badge" id="social-badge" hidden></span></button>
+    <button role="tab" id="vp-tab-2" aria-selected="false" aria-controls="vp-p5 vp-p6">
+      <svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Stamps</button>
+  </div>
+</section>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="importmap">
@@ -174,5 +212,6 @@
 <script defer src="/static/app.js"></script>
 <script defer src="/static/history.js"></script>
 <script defer src="/static/social.js"></script>
+<script defer src="/static/passport.js"></script>
 </body>
 </html>
