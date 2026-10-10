@@ -89,10 +89,10 @@ CLASSES = ["logrow", "frow", "prow", "brow", "card", "sel", "emerg", "phase",
            "hint", "error", "tag", "gdot", "gmark", "gpop", "av", "pn", "un",
            "st", "rank", "ws", "sub", "h2h", "lead", "acct", "menu", "quiet",
            "danger", "editing", "on", "badge", "count", "empty", "medal", "ico",
-           "vp-open", "vp-backdrop", "vp-stage", "vp-book", "vp-page", "vp-static",
-           "vp-left", "vp-right", "vp-leaf", "vp-face", "vp-front", "vp-back",
-           "vp-grip", "vp-shade", "vp-tabs", "vp-close", "vp-stamps", "vp-stamp",
-           "vp-spine"]
+           "vp-peek", "vp-peek-crest", "vp-peek-title", "vp-backdrop", "vp-stage",
+           "vp-book", "vp-page", "vp-static", "vp-left", "vp-right", "vp-leaf",
+           "vp-face", "vp-front", "vp-back", "vp-grip", "vp-shade", "vp-arrow",
+           "vp-live", "vp-close", "vp-stamps", "vp-stamp", "vp-spine"]
 
 
 class TestStylesheet(unittest.TestCase):
@@ -211,45 +211,61 @@ class TestCopy(unittest.TestCase):
         self.assertNotIn("!", visible)
 
 
-# The six passport pages, grouped by which spread shows them.
-PASSPORT_SPREADS = [("vp-tab-0", ["vp-p1", "vp-p2"]),
-                     ("vp-tab-1", ["vp-p3", "vp-p4"]),
-                     ("vp-tab-2", ["vp-p5", "vp-p6"])]
+# The six passport pages, grouped into the spread that shows them. The
+# page-turn JS and the small-screen CSS both key off these groupings.
+PASSPORT_SPREADS = [["vp-p1", "vp-p2"], ["vp-p3", "vp-p4"], ["vp-p5", "vp-p6"]]
 
 
 class TestPassport(unittest.TestCase):
-    """The tab row that replaced the old sidebar tabs is a real tablist,
-    every page it controls exists, and the book keeps its own fixed palette
-    the way .mapwrap keeps its own fixed dark palette."""
+    """The passport opens from the cover peeking up at the bottom of the
+    screen, turns with arrows and the keyboard, and keeps its own fixed
+    palette the way .mapwrap keeps its own fixed dark palette."""
 
     def setUp(self):
         self.index = PAGES["index.html"]
 
-    def test_the_tablist_has_one_tab_per_spread_with_aria_wiring(self):
-        self.assertIn('role="tablist"', self.index)
-        for tab_id, pages in PASSPORT_SPREADS:
-            with self.subTest(tab=tab_id):
-                m = re.search(r'<button role="tab" id="%s"[^>]*>' % re.escape(tab_id),
-                              self.index)
-                self.assertIsNotNone(m, f"{tab_id} is missing")
-                tag = m.group(0)
-                self.assertIn('aria-selected="', tag)
-                self.assertIn('aria-controls="%s"' % " ".join(pages), tag)
+    def test_the_closed_cover_is_the_way_in_and_says_so(self):
+        m = re.search(r'<button class="vp-peek" id="vp-open"[^>]*>', self.index)
+        self.assertIsNotNone(m, "the peeking cover is missing")
+        self.assertIn('aria-label="Open your passport"', m.group(0))
+        # The old header button is gone: the cover is the only way in.
+        self.assertNotIn('class="vp-open"', self.index)
 
-    def test_every_passport_page_is_controlled_by_exactly_one_tab(self):
-        controlled = re.findall(r'aria-controls="([^"]+)"', self.index)
-        all_pages = [p for group in controlled for p in group.split()]
-        expected = [p for _, pages in PASSPORT_SPREADS for p in pages]
-        self.assertEqual(sorted(all_pages), sorted(expected))
+    def test_the_arrows_are_labelled_and_replace_the_tab_row(self):
+        for arrow_id, label in (("vp-prev", "Previous page"), ("vp-next", "Next page")):
+            with self.subTest(arrow=arrow_id):
+                m = re.search(r'<button class="vp-arrow" id="%s"[^>]*>' % arrow_id,
+                              self.index)
+                self.assertIsNotNone(m, f"{arrow_id} is missing")
+                self.assertIn('aria-label="%s"' % label, m.group(0))
+        self.assertNotIn('role="tablist"', self.index)
+        self.assertNotIn('role="tab"', self.index)
+
+    def test_every_passport_page_is_on_the_page_and_in_a_spread(self):
+        expected = [p for pages in PASSPORT_SPREADS for p in pages]
         for page_id in expected:
             with self.subTest(page=page_id):
                 self.assertIn('id="%s"' % page_id, self.index)
+        # passport.js must group them the same way, or a turn would leave
+        # the wrong pages reachable.
+        grouped = re.findall(r"pages: \[([^\]]+)\]", SCRIPTS["passport.js"])
+        self.assertEqual([re.findall(r"'([^']+)'", g) for g in grouped],
+                         PASSPORT_SPREADS)
+
+    def test_the_overlay_is_a_modal_that_announces_the_page(self):
+        self.assertIn('role="dialog"', self.index)
+        self.assertIn('aria-modal="true"', self.index)
+        live = re.search(r'<p class="vp-live" id="vp-live"[^>]*>', self.index)
+        self.assertIsNotNone(live, "the live region is missing")
+        self.assertIn('aria-live="polite"', live.group(0))
 
     def test_opening_and_closing_do_not_need_a_mouse(self):
         js = SCRIPTS["passport.js"]
         self.assertIn("Escape", js)
         self.assertIn("ArrowRight", js)
         self.assertIn("ArrowLeft", js)
+        # Tab must not wander onto the dimmed map behind the passport.
+        self.assertIn("trapTab", js)
 
     def test_dragging_is_off_when_motion_is_reduced(self):
         self.assertIn("prefers-reduced-motion", SCRIPTS["passport.js"])

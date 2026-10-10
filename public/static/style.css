@@ -89,7 +89,6 @@ body.no-live .live-only{display:none}
   border:2px solid var(--accent-line);white-space:nowrap}
 .pill.quiet{background:var(--panel-2);color:var(--muted);border-color:var(--line)}
 .pill.bad{background:var(--red-tint);color:var(--red);border-color:var(--red-line)}
-.vp-open{display:flex;align-items:center;gap:8px;min-height:40px;padding:6px 14px}
 
 /* ------------------------------------------------------------- layout */
 main{display:flex;height:calc(100vh - 60px);background:var(--bg)}
@@ -128,14 +127,6 @@ button.danger{background:var(--red-fill);color:var(--on-red);
 .hint.error{color:var(--red);font-weight:700}
 .empty{color:var(--muted);font-size:14px;margin:0}
 
-.vp-tabs{display:flex;gap:8px}
-.vp-tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
-  padding:8px 6px;background:var(--panel);color:var(--muted);border-color:var(--line);
-  box-shadow:0 4px 0 var(--lip)}
-.vp-tabs button[aria-selected="true"]{background:var(--accent-dim);color:var(--accent-ink);
-  border-color:var(--accent-line);box-shadow:0 4px 0 var(--accent-line);
-  animation:pop .15s ease-out}
-@keyframes pop{from{transform:scale(.96)}to{transform:scale(1)}}
 .badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:999px;
   background:var(--red-fill);color:var(--on-red);font-size:11px;line-height:18px;
   letter-spacing:0}
@@ -313,7 +304,8 @@ table.h2h td:last-child.lead{color:var(--coral-ink)}
 .pop{font-size:13px;font-weight:700;line-height:1.7}
 .pop b{font-family:var(--mono);font-size:15px;color:var(--accent-ink)}
 
-.toast{position:absolute;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);
+/* Clears the closed passport sitting at the bottom of the screen. */
+.toast{position:absolute;bottom:104px;left:50%;transform:translateX(-50%) translateY(20px);
   background:var(--panel);color:var(--ink);border:2px solid var(--accent-line);
   padding:12px 18px;border-radius:16px;font-size:14px;font-weight:700;opacity:0;
   pointer-events:none;box-shadow:var(--shadow);transition:opacity .2s,transform .2s;
@@ -336,6 +328,28 @@ table.h2h td:last-child.lead{color:var(--coral-ink)}
 .acct .menu input{width:100%;flex:none}
 
 /* ------------------------------------------------------------ passport */
+/* Closed, the passport sits at the bottom of the screen with only the top
+   of its cover showing, the page edges peeking out above it. */
+.vp-peek{position:fixed;left:50%;bottom:0;z-index:930;width:min(340px,76vw);
+  display:flex;flex-direction:column;align-items:center;gap:1px;
+  min-height:0;margin:0;padding:13px 20px 16px;
+  transform:translateX(-50%) translateY(10px);
+  background:var(--vp-cover);color:var(--vp-cover-ink);
+  border:2px solid #0f1d31;border-bottom:none;border-radius:20px 20px 0 0;
+  box-shadow:0 -10px 28px rgba(0,0,0,.4);text-transform:none;letter-spacing:0;
+  transition:transform .26s cubic-bezier(.2,.8,.25,1),box-shadow .26s ease}
+.vp-peek::before{content:"";position:absolute;left:16px;right:16px;top:-6px;height:6px;
+  border-radius:5px 5px 0 0;
+  background:linear-gradient(180deg,#f6f1e3 0 2px,#e7dfc8 2px 4px,#d6cbac 4px)}
+.vp-peek:hover,.vp-peek:focus-visible{transform:translateX(-50%) translateY(0);
+  box-shadow:0 -14px 34px rgba(0,0,0,.46)}
+.vp-peek:active{transform:translateX(-50%) translateY(4px);
+  box-shadow:0 -6px 18px rgba(0,0,0,.4)}
+.vp-peek[hidden]{display:none}
+.vp-peek-crest{font-size:17px;line-height:1;color:var(--vp-cover-muted)}
+.vp-peek-title{font-size:12px;font-weight:800;letter-spacing:.22em;text-transform:uppercase}
+.vp-peek .badge{position:absolute;top:10px;right:16px}
+
 .vp-backdrop{position:fixed;inset:0;z-index:940;background:var(--vp-backdrop);
   opacity:0;transition:opacity .3s ease}
 .vp-backdrop.show{opacity:1}
@@ -346,8 +360,10 @@ table.h2h td:last-child.lead{color:var(--coral-ink)}
    reads correctly on cream paper without a single component-level change. */
 .vp-stage{
   position:fixed;inset:0;z-index:950;display:flex;align-items:center;
-  justify-content:center;padding:24px;opacity:0;transform:scale(.96);
-  transition:opacity .3s ease,transform .3s ease;pointer-events:none;
+  justify-content:center;gap:14px;padding:24px;
+  opacity:0;transform:translateY(70px) scale(.985);
+  transition:opacity .3s ease,transform .42s cubic-bezier(.2,.8,.25,1);
+  pointer-events:none;
   --panel:#f6f1e3; --panel-2:#efe8d4; --line:#ddd3b8; --lip:#cdbf99;
   --ink:#3a3426; --muted:#6b6248; --faint:#6e6440;
   --accent:#6a3fa0; --accent-lip:#52316f; --accent-dim:#ece3f5; --accent-line:#b79bd6;
@@ -360,15 +376,15 @@ table.h2h td:last-child.lead{color:var(--coral-ink)}
   --red-tint:#f3ddd6; --red-line:#d4a89e;
   --shadow:0 10px 30px rgba(20,14,4,.35);
 }
-.vp-stage.show{opacity:1;transform:scale(1);pointer-events:auto}
+.vp-stage.show{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
 .vp-stage[hidden]{display:none}
 .vp-close{position:absolute;top:18px;right:18px;z-index:960;min-height:0;margin:0;
   padding:4px 12px;background:var(--vp-cover);color:var(--vp-cover-ink);
   border:2px solid var(--vp-cover-muted);box-shadow:none;font-size:22px;line-height:1}
 .vp-close:hover{filter:brightness(1.2)}
 
-.vp-book{position:relative;width:min(960px,92vw);height:min(640px,82vh);
-  perspective:2400px;margin-bottom:68px}
+.vp-book{position:relative;flex:none;width:min(960px,calc(100% - 140px));
+  height:min(660px,84vh);perspective:2400px}
 .vp-page{position:absolute;top:0;height:100%;width:50%;overflow-y:auto;
   padding:26px 28px;background:var(--panel);color:var(--ink);font-family:var(--sans)}
 .vp-static.vp-left{left:0;border-radius:18px 0 0 18px;box-shadow:var(--shadow)}
@@ -396,12 +412,20 @@ table.h2h td:last-child.lead{color:var(--coral-ink)}
   rgba(0,0,0,.35),transparent 55%);opacity:0;pointer-events:none}
 .vp-leaf:not(.dragging) .vp-shade{transition:opacity .45s ease}
 
-.vp-tabs{display:flex;gap:10px;width:min(960px,92vw);position:absolute;
-  bottom:24px;left:50%;transform:translateX(-50%)}
-.vp-tabs button{background:var(--vp-cover);color:var(--vp-cover-muted);
-  border-color:var(--vp-cover);box-shadow:0 4px 0 #0f1d31}
-.vp-tabs button[aria-selected="true"]{color:var(--vp-cover-ink);
-  border-color:var(--vp-cover-ink)}
+/* Quiet by default, awake on hover: the page turn is the main event, not
+   the control that triggers it. */
+.vp-arrow{flex:none;width:54px;height:54px;min-height:0;margin:0;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(246,241,227,.09);color:var(--vp-cover-ink);
+  border:2px solid rgba(246,241,227,.2);border-radius:50%;box-shadow:none;
+  font-size:30px;line-height:1;letter-spacing:0;text-transform:none;opacity:.5;
+  transition:opacity .18s ease,background-color .18s ease,transform .18s ease}
+.vp-arrow:hover{opacity:1;background:rgba(246,241,227,.19);filter:none}
+.vp-arrow:active{transform:scale(.93);box-shadow:none}
+.vp-arrow:disabled{opacity:.12;cursor:not-allowed;transform:none;box-shadow:none}
+
+.vp-live{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap;border:0}
 
 .vp-stamps{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
   gap:12px}
@@ -432,7 +456,7 @@ body.gate{display:flex;align-items:center;justify-content:center;overflow:auto;
   .bar{height:auto;min-height:60px;padding:8px 12px;row-gap:6px}
   main{flex-direction:column;height:auto;overflow:visible}
   .mapwrap{height:60vh;flex:none}
-  .vp-stage{padding:0}
+  .vp-stage{display:block;padding:0}
   .vp-book{width:100%;height:100%;max-height:none;perspective:none}
   .vp-page,.vp-leaf,.vp-face{position:static;width:100%;height:auto;
     border-radius:0!important;box-shadow:none;transform:none!important;
@@ -446,10 +470,12 @@ body.gate{display:flex;align-items:center;justify-content:center;overflow:auto;
   .vp-stage[data-spread="1"] #vp-leaf2 .vp-face.vp-front{display:block}
   .vp-stage[data-spread="2"] #vp-leaf2 .vp-face.vp-back,
   .vp-stage[data-spread="2"] #vp-p6{display:block;position:static;width:100%}
-  .vp-book{overflow-y:auto;padding:64px 20px 100px}
-  .vp-tabs{position:fixed;left:0;right:0;bottom:0;width:auto;transform:none;
-    background:var(--panel);padding:10px 12px;border-top:2px solid var(--line);
-    margin:0}
+  .vp-book{overflow-y:auto;padding:64px 20px 96px}
+  .vp-arrow{position:fixed;bottom:18px;z-index:970;width:50px;height:50px;
+    opacity:1;background:var(--vp-cover);border-color:#0f1d31;
+    box-shadow:0 6px 18px rgba(0,0,0,.4)}
+  #vp-prev{left:18px}
+  #vp-next{right:18px}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{transition:none!important;animation:none!important}

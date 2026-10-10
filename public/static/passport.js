@@ -6,10 +6,11 @@
 // needs no changes.
 
 const VP_SPREADS = [
-  { name: 'history', tab: 'vp-tab-0' },
-  { name: 'social', tab: 'vp-tab-1' },
-  { name: 'stamps', tab: 'vp-tab-2' },
+  { name: 'history', label: 'Flights', pages: ['vp-p1', 'vp-p2'] },
+  { name: 'social', label: 'Mates', pages: ['vp-p3', 'vp-p4'] },
+  { name: 'stamps', label: 'Stamps', pages: ['vp-p5', 'vp-p6'] },
 ];
+const VP_ALL_PAGES = VP_SPREADS.flatMap(s => s.pages);
 const ACTIVE_Z = 5;
 const TURN_MS = 450;
 const REDUCE_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -42,8 +43,17 @@ function animateLeaf(n, toAngle) {
 }
 
 function updateChrome() {
-  VP_SPREADS.forEach((s, i) => $(s.tab).setAttribute('aria-selected', String(i === vpSpread)));
+  const spread = VP_SPREADS[vpSpread];
   $('vp-stage').dataset.spread = String(vpSpread);
+  $('vp-prev').disabled = vpSpread === 0;
+  $('vp-next').disabled = vpSpread === VP_SPREADS.length - 1;
+  $('vp-live').textContent =
+    `${spread.label}, page ${vpSpread + 1} of ${VP_SPREADS.length}`;
+  // Only the spread on show takes the keyboard or the screen reader: the
+  // pages behind a turned leaf are invisible but would otherwise still be
+  // in the tab order.
+  const showing = new Set(spread.pages);
+  for (const id of VP_ALL_PAGES) $(id).inert = !showing.has(id);
   for (const n of [1, 2]) {
     const grip = leafEl(n).querySelector('.vp-grip');
     grip.style.cursor = leafActive(n) ? 'grab' : 'default';
@@ -66,9 +76,8 @@ function goToSpread(target) {
   announceSpread();
 }
 
-for (const s of VP_SPREADS) {
-  $(s.tab).addEventListener('click', () => goToSpread(VP_SPREADS.indexOf(s)));
-}
+$('vp-prev').addEventListener('click', () => goToSpread(vpSpread - 1));
+$('vp-next').addEventListener('click', () => goToSpread(vpSpread + 1));
 
 // ------------------------------------------------------------------ drag
 let drag = null; // { n, startX, startAngle, width, angle }
@@ -122,24 +131,50 @@ for (const n of [1, 2]) {
 }
 
 // --------------------------------------------------------- open / close
+const OPEN_MS = 320;
+
 function openPassport() {
   $('vp-backdrop').hidden = false;
   $('vp-stage').hidden = false;
+  // The cover slides up into the open book, so it stops being a target.
+  $('vp-open').hidden = true;
   requestAnimationFrame(() => {
     $('vp-backdrop').classList.add('show');
     $('vp-stage').classList.add('show');
   });
+  $('vp-close').focus({ preventScroll: true });
 }
 
 function closePassport() {
   $('vp-backdrop').classList.remove('show');
   $('vp-stage').classList.remove('show');
+  $('vp-open').hidden = false;
   setTimeout(() => {
     if (!$('vp-stage').classList.contains('show')) {
       $('vp-backdrop').hidden = true;
       $('vp-stage').hidden = true;
     }
-  }, REDUCE_MOTION ? 0 : 300);
+  }, REDUCE_MOTION ? 0 : OPEN_MS);
+  $('vp-open').focus({ preventScroll: true });
+}
+
+// The passport covers the page, so the Tab key stays inside it.
+const FOCUSABLE = 'a[href],button:not(:disabled),input:not([type=hidden]):not(:disabled),' +
+                  'select:not(:disabled),textarea:not(:disabled),summary,' +
+                  '[tabindex]:not([tabindex="-1"])';
+
+function trapTab(e) {
+  const items = [...$('vp-stage').querySelectorAll(FOCUSABLE)]
+    .filter(el => el.getClientRects().length > 0);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    last.focus();
+    e.preventDefault();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    first.focus();
+    e.preventDefault();
+  }
 }
 
 $('vp-open').addEventListener('click', openPassport);
@@ -151,6 +186,7 @@ $('vp-backdrop').addEventListener('click', closePassport);
 document.addEventListener('keydown', e => {
   if (!$('vp-stage').classList.contains('show')) return;
   if (e.key === 'Escape') { closePassport(); return; }
+  if (e.key === 'Tab') { trapTab(e); return; }
   const t = document.activeElement;
   if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
   if (t && t.isContentEditable) return;

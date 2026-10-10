@@ -23,10 +23,6 @@
 </svg>
 <header class="bar">
   <div class="brand"><span class="glyph">✈</span> WING<span class="dim">MATES</span></div>
-  <button class="vp-open" id="vp-open">
-    <svg class="ico" aria-hidden="true"><use href="#i-plane"/></svg>
-    Passport<span class="badge" id="passport-badge" hidden></span>
-  </button>
   <div class="status live-only" id="status">
     <span class="pill" id="pill-source">connecting…</span>
     <span class="pill quiet" id="pill-tracked">0 tracked</span>
@@ -56,9 +52,19 @@
   </div>
 </main>
 
+<button class="vp-peek" id="vp-open" aria-label="Open your passport">
+  <span class="vp-peek-crest" aria-hidden="true">✈</span>
+  <span class="vp-peek-title">Passport</span>
+  <span class="badge" id="passport-badge" hidden></span>
+</button>
+
 <div class="vp-backdrop" id="vp-backdrop" hidden></div>
-<section class="vp-stage" id="vp-stage" aria-label="Your passport" hidden>
+<section class="vp-stage" id="vp-stage" role="dialog" aria-modal="true"
+         aria-label="Your passport" hidden>
   <button class="vp-close" id="vp-close" title="Close passport" aria-label="Close passport">×</button>
+  <p class="vp-live" id="vp-live" role="status" aria-live="polite"></p>
+
+  <button class="vp-arrow" id="vp-prev" aria-label="Previous page">‹</button>
 
   <div class="vp-book" id="vp-book">
     <div class="vp-page vp-static vp-left" id="vp-p1">
@@ -162,7 +168,9 @@
     <div class="vp-leaf" id="vp-leaf2">
       <div class="vp-page vp-face vp-front" id="vp-p4">
         <section>
-          <h2>Mates <span class="count" id="mates-count">0</span></h2>
+          <h2><svg class="ico" aria-hidden="true"><use href="#i-mates"/></svg>Mates
+            <span class="count" id="mates-count">0</span>
+            <span class="badge" id="social-badge" hidden></span></h2>
           <div id="board" class="log"></div>
           <p class="empty" id="mates-empty">No mates yet. Find one by username and see who has flown further.</p>
         </section>
@@ -191,14 +199,7 @@
     <span class="vp-spine" aria-hidden="true"></span>
   </div>
 
-  <div class="vp-tabs" role="tablist" aria-label="Passport pages">
-    <button role="tab" id="vp-tab-0" aria-selected="true" aria-controls="vp-p1 vp-p2">
-      <svg class="ico" aria-hidden="true"><use href="#i-plane"/></svg>Flights</button>
-    <button role="tab" id="vp-tab-1" aria-selected="false" aria-controls="vp-p3 vp-p4">
-      <svg class="ico" aria-hidden="true"><use href="#i-mates"/></svg>Mates<span class="badge" id="social-badge" hidden></span></button>
-    <button role="tab" id="vp-tab-2" aria-selected="false" aria-controls="vp-p5 vp-p6">
-      <svg class="ico" aria-hidden="true"><use href="#i-globe"/></svg>Stamps</button>
-  </div>
+  <button class="vp-arrow" id="vp-next" aria-label="Next page">›</button>
 </section>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
